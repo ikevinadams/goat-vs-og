@@ -2720,6 +2720,10 @@
       game.shake = Math.max(game.shake, 30);
       flashText('BOSS DOWN', '#2bd66e', e.x + e.w/2, e.y - 20);
       sfxExplosion();
+      // Mid-run banner: celebrate the boss kill and tell the player the
+      // run continues. Reuses the stage-banner system, but flagged as a
+      // 'bossClear' variant so drawStageBanner() shows the right text.
+      game.stageBanner = { stage: 'bossClear', t: 0, duration: 3.0 };
       // Restore the player's pre-boss loadout — back to normal ammo + the
       // weapon unlocks they had before the encounter.
       if (game.ammoBeforeBoss) {
@@ -3340,17 +3344,25 @@
     ctx.fillStyle = bandGrad;
     ctx.fillRect(0, cy - bandH/2, W, bandH);
 
+    // Two banner styles:
+    //   - Stage transition banner: top tag = "STAGE 2/3", big sub = threat info
+    //   - Boss-clear banner: top tag = "BOSS DEFEATED", big sub = "FINISH THE REST"
+    const isBossClear = b.stage === 'bossClear';
+    const tagText = isBossClear ? 'BOSS DEFEATED' : ('STAGE ' + b.stage);
+    const tagColor = isBossClear ? '#2bd66e' : '#ffd84d';   // green for victory, gold for stage
+    const subText =
+      isBossClear      ? 'FINISH THE REST' :
+      b.stage === 2    ? 'NEW THREATS INCOMING' :
+      b.stage === 3    ? 'BOSS APPROACHING' :
+                         '';
+
     // Tag line ABOVE — small, calm
-    ctx.fillStyle = '#ffd84d';
+    ctx.fillStyle = tagColor;
     ctx.font = '600 22px system-ui, "Helvetica Neue", sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('STAGE ' + b.stage, cx, cy - 18);
+    ctx.fillText(tagText, cx, cy - 18);
 
-    // Sub-line BELOW — describes the stage
-    const subText =
-      b.stage === 2 ? 'NEW THREATS INCOMING' :
-      b.stage === 3 ? 'BOSS APPROACHING' :
-                      '';
+    // Sub-line BELOW — describes the moment
     ctx.fillStyle = '#f4f1ea';
     ctx.font = '900 56px Impact, "Arial Black", sans-serif';
     ctx.fillText(subText, cx, cy + 40);
@@ -3397,13 +3409,15 @@
     ctx.fillRect(0,0,W,H);
 
     // Background layer — picks the stage-appropriate background:
-    //   Stage 1 (kills 0-24)  -> bg_stage1 (dark indoor corridor)
-    //   Stage 2 (kills 25-49) -> bg_stage2 (broken terrace v2)
-    //   Stage 3 (kills 50+)   -> bg_stage2 reused (boss + post-boss continue
-    //                            on the same terrace; bg_stage3 file kept on
-    //                            disk for a future swap if we want one).
+    //   Stage 1 (kills 0-24)        -> bg_stage1 (dark indoor corridor)
+    //   Stage 2 (kills 25-49)       -> bg_stage2 (broken terrace)
+    //   Stage 3 with bossActive     -> bg_stage3 (battle-damaged cloning lab,
+    //                                  the boss arena)
+    //   Stage 3 post-boss-defeat    -> bg_stage2 reused (return to terrace
+    //                                  for endless mixed-clone waves)
     // Falls back to bg_far if the stage slot isn't loaded yet.
     const stageBg = currentStage() === 1 ? sprites.bg_stage1
+                  : (currentStage() === 3 && game.bossActive) ? sprites.bg_stage3
                                          : sprites.bg_stage2;
     const activeBg = stageBg || sprites.bg_far;
     if (activeBg) {
