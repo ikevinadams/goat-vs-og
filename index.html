@@ -61,6 +61,26 @@
     display: flex; align-items: center; justify-content: center;
     pointer-events: none;
   }
+  /* Boss-defeat cutscene overlay — fullscreen black backdrop with the
+     video centered on top. Fades in / out via the .cutscene-fading class.
+     Sits above gameplay canvas (z-index high) so the video covers the
+     entire viewport while it plays. */
+  .cutscene-overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #000;
+    z-index: 50;
+    opacity: 1;
+    transition: opacity 0.6s ease-out;
+    pointer-events: none;
+  }
+  .cutscene-overlay.cutscene-fading { opacity: 0; }
+  .cutscene-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;   /* preserves aspect ratio; black bars fill mismatched sides */
+    background: #000;
+  }
   .panel {
     pointer-events: auto;
     background: rgba(8, 10, 14, 0.82);
@@ -783,6 +803,16 @@
     </div>
 
     <!-- Pause -->
+    <!-- Boss-defeated cutscene — fullscreen video overlay. Plays once when
+         the boss dies, pauses gameplay, then fades out into the post-boss
+         banner. BGM keeps playing during the cutscene; the video has its
+         own gunshot SFX that layers on top. -->
+    <div id="cutscene" class="cutscene-overlay hidden">
+      <video id="cutsceneVideo" class="cutscene-video" muted playsinline preload="auto">
+        <source src="sprites/boss_cutscene.mp4" type="video/mp4">
+      </video>
+    </div>
+
     <div id="pause" class="overlay hidden">
       <div class="panel">
         <h2>PAUSED</h2>
@@ -2266,7 +2296,7 @@
 
   // ------------- Game state -------------
   const game = {
-    state: 'start',          // 'start' | 'play' | 'pause' | 'over'
+    state: 'start',          // 'start' | 'play' | 'pause' | 'cutscene' | 'over'
     time: 0,
     cameraX: 0,
     shake: 0,
@@ -2720,10 +2750,12 @@
       game.shake = Math.max(game.shake, 30);
       flashText('BOSS DOWN', '#2bd66e', e.x + e.w/2, e.y - 20);
       sfxExplosion();
-      // Mid-run banner: celebrate the boss kill and tell the player the
-      // run continues. Reuses the stage-banner system, but flagged as a
-      // 'bossClear' variant so drawStageBanner() shows the right text.
-      game.stageBanner = { stage: 'bossClear', t: 0, duration: 3.0 };
+      // Trigger the boss-defeat cutscene. State flips to 'cutscene' which
+      // pauses gameplay updates (BGM keeps playing in the background).
+      // The cutscene's own gunshot SFX layers on top of the BGM.
+      // When the video ends or its on-end handler fires, gameplay resumes
+      // and the BOSS DEFEATED banner appears.
+      playBossCutscene();
       // Restore the player's pre-boss loadout — back to normal ammo + the
       // weapon unlocks they had before the encounter.
       if (game.ammoBeforeBoss) {
@@ -2743,6 +2775,62 @@
   }
 
   // ------------- Update loop -------------
+  // ------------- Boss-defeat cutscene -------------
+  // Pauses gameplay (sets state to 'cutscene' so update() returns early),
+  // shows the fullscreen video overlay, plays it. BGM keeps playing during
+  // the cutscene; the video's own gunshot SFX layers on top. When the video
+  // finishes (or fails), fades the overlay out and resumes gameplay with
+  // the BOSS DEFEATED banner.
+  function playBossCutscene() {
+    const overlay = document.getElementById('cutscene');
+    const video = document.getElementById('cutsceneVideo');
+    if (!overlay || !video) {
+      // Fallback if the cutscene element isn't in the DOM for some reason
+      // — go straight to the banner so the run keeps moving.
+      game.stageBanner = { stage: 'bossClear', t: 0, duration: 3.0 };
+      return;
+    }
+
+    // Pause gameplay
+    game.state = 'cutscene';
+
+    // Reveal overlay (no fade-in — instant cut to the cutscene)
+    overlay.classList.remove('hidden');
+    overlay.classList.remove('cutscene-fading');
+
+    // Unmute the video so its gunshot SFX is audible alongside BGM.
+    // (HTML attribute "muted" is set as an autoplay safety net for browsers
+    // that block sound; we override here now that gameplay is in progress
+    // and the user has already interacted with the page.)
+    video.muted = false;
+    video.volume = 1.0;
+    video.currentTime = 0;
+    video.play().catch(() => { /* if autoplay blocked, fall through */ });
+
+    // When the video ends (or fails), wrap up.
+    let wrapped = false;
+    const wrap = () => {
+      if (wrapped) return;
+      wrapped = true;
+      // Fade overlay out over 0.6s (matches the CSS transition)
+      overlay.classList.add('cutscene-fading');
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('cutscene-fading');
+        // Resume gameplay + fire the BOSS DEFEATED banner now that we're
+        // back on the terrace background (bg auto-swapped when bossActive
+        // flipped to false at boss-death time).
+        game.state = 'play';
+        game.stageBanner = { stage: 'bossClear', t: 0, duration: 3.0 };
+      }, 650);
+    };
+    video.onended = wrap;
+    video.onerror = wrap;
+    // Safety timeout — if 'ended' never fires for some reason, end after the
+    // known duration + half a second buffer.
+    setTimeout(wrap, 4500);
+  }
+
   function update(dt) {
     if (game.state !== 'play') return;
     game.time += dt;
