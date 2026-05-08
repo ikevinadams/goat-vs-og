@@ -17,6 +17,11 @@
 <link rel="icon" type="image/png" sizes="192x192" href="favicon-192.png" />
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
 <meta name="theme-color" content="#0a0d14" />
+<!-- Preload the boss-defeat cutscene at page load so when the boss dies the
+     video starts INSTANTLY with no buffering pause. Without this hint the
+     browser waits until the <video> element first asks for the file, which
+     is right when we want playback to begin — causing a visible lag. -->
+<link rel="preload" as="video" type="video/mp4" href="sprites/boss_cutscene.mp4" />
 <!-- Vercel Web Analytics — calls inject() as documented, loaded as ESM
      from CDN since this project has no npm/bundler setup. -->
 <script type="module">
@@ -1476,6 +1481,25 @@
   // NOTE: loadSprites() is no longer called on boot — it's now triggered
   // from startGame() so the home screen loads instantly and the heavy
   // sprite payload only downloads when the player commits to playing.
+
+  // Cover-fit render: scale a sprite so it fills the entire canvas while
+  // preserving its aspect ratio, center-cropping any overflow. Equivalent to
+  // CSS `background-size: cover; background-position: center`. Used for the
+  // boss arena (locked camera) where we want the bg to fill the screen
+  // cleanly with no tile seams. Also auto-adapts to any device aspect ratio
+  // — 16:9 desktop, ultrawide, mobile portrait — same image, different crop.
+  function drawBgCover(sprite) {
+    if (!sprite) return;
+    const sw = sprite.naturalWidth  || sprite.width;
+    const sh = sprite.naturalHeight || sprite.height;
+    if (!sw || !sh) return;
+    const scale = Math.max(W / sw, H / sh);   // cover (max), not contain (min)
+    const drawW = sw * scale;
+    const drawH = sh * scale;
+    const dx = (W - drawW) / 2;               // center horizontally
+    const dy = (H - drawH) / 2;               // center vertically
+    ctx.drawImage(sprite, dx, dy, drawW, drawH);
+  }
 
   // Tile a panoramic background sprite horizontally with parallax scroll.
   // `parFactor` 0..1 controls how much the layer scrolls with the camera.
@@ -3496,20 +3520,31 @@
     ctx.fillStyle = glow;
     ctx.fillRect(0,0,W,H);
 
-    // Background layer — picks the stage-appropriate background:
+    // Background layer — picks the stage-appropriate background.
     //   Stage 1 (kills 0-24)        -> bg_stage1 (dark indoor corridor)
     //   Stage 2 (kills 25-49)       -> bg_stage2 (broken terrace)
     //   Stage 3 with bossActive     -> bg_stage3 (battle-damaged cloning lab,
     //                                  the boss arena)
-    //   Stage 3 post-boss-defeat    -> bg_stage2 reused (return to terrace
-    //                                  for endless mixed-clone waves)
-    // Falls back to bg_far if the stage slot isn't loaded yet.
-    const stageBg = currentStage() === 1 ? sprites.bg_stage1
-                  : (currentStage() === 3 && game.bossActive) ? sprites.bg_stage3
-                                         : sprites.bg_stage2;
+    //   Stage 3 post-boss-defeat    -> bg_stage2 reused (return to terrace)
+    // Render mode also depends on stage:
+    //   - During the boss arena (locked camera, no scroll) we use cover-fit:
+    //     a SINGLE image scaled to fill the canvas, center-cropping any
+    //     overflow. No tiling, no seam, no parallax — the image is treated
+    //     as a designed-composition backdrop. This auto-adapts to any canvas
+    //     aspect ratio (16:9 desktop, ultrawide, portrait mobile).
+    //   - Other stages keep the scrolling parallax tile so the world feels
+    //     like it's moving past as the hero runs.
+    const stage = currentStage();
+    const stageBg = stage === 1 ? sprites.bg_stage1
+                  : (stage === 3 && game.bossActive) ? sprites.bg_stage3
+                                : sprites.bg_stage2;
     const activeBg = stageBg || sprites.bg_far;
     if (activeBg) {
-      drawParallaxLayer(activeBg, 0.55, 0, H, { mirror: false, fadeEdges: false });
+      if (stage === 3 && game.bossActive) {
+        drawBgCover(activeBg);
+      } else {
+        drawParallaxLayer(activeBg, 0.55, 0, H, { mirror: false, fadeEdges: false });
+      }
     } else {
       drawSkyline(0.15, '#0c0f15', H*0.62, 90);
       drawSkyline(0.30, '#13161e', H*0.66, 70);
@@ -4750,6 +4785,13 @@
     document.getElementById('gameover').classList.add('hidden');
     document.getElementById('pause').classList.add('hidden');
     document.getElementById('continue').classList.add('hidden');
+    // Force the boss cutscene video to start buffering NOW, not when the
+    // boss dies. This eliminates the playback lag the user was seeing.
+    // load() triggers the browser to fetch + decode the video so by the time
+    // play() is called later (50+ kills in), the file is fully ready in the
+    // media cache and playback begins on the next render frame.
+    const cutscene = document.getElementById('cutsceneVideo');
+    if (cutscene) { try { cutscene.load(); } catch (e) {} }
     // Show the loading screen and start streaming game assets. We hold a
     // minimum visible duration (600ms on fast / 250ms on slow because slow
     // users will already see the bar fill slowly) so the transition feels
