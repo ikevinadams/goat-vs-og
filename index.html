@@ -22,6 +22,7 @@
      browser waits until the <video> element first asks for the file, which
      is right when we want playback to begin — causing a visible lag. -->
 <link rel="preload" as="video" type="video/mp4" href="sprites/boss_cutscene.mp4" />
+<link rel="preload" as="video" type="video/mp4" href="sprites/defeat_cutscene.mp4" />
 <!-- Vercel Web Analytics — calls inject() as documented, loaded as ESM
      from CDN since this project has no npm/bundler setup. -->
 <script type="module">
@@ -815,6 +816,15 @@
     <div id="cutscene" class="cutscene-overlay hidden">
       <video id="cutsceneVideo" class="cutscene-video" muted playsinline preload="auto">
         <source src="sprites/boss_cutscene.mp4" type="video/mp4">
+      </video>
+    </div>
+
+    <!-- Hero-defeated cutscene — plays when the player dies during a boss
+         fight. Boss stands victorious, then transitions to the game-over
+         overlay. Same overlay container reused; only the source differs. -->
+    <div id="defeatCutscene" class="cutscene-overlay hidden">
+      <video id="defeatCutsceneVideo" class="cutscene-video" muted playsinline preload="auto">
+        <source src="sprites/defeat_cutscene.mp4" type="video/mp4">
       </video>
     </div>
 
@@ -2878,6 +2888,60 @@
     setTimeout(wrap, 4500);
   }
 
+  // ------------- Hero-defeat cutscene -------------
+  // Triggered from update() when player.hp drops to 0 during a boss fight.
+  // Pauses gameplay (sets state to 'cutscene' so update() returns early),
+  // shows the fullscreen defeat-cutscene video, then transitions to the
+  // game-over overlay when the video ends. BGM keeps playing during the
+  // cutscene to maintain emotional tone; the video's own audio (boss
+  // dialogue, gunshot, "GAME OVER" sting) layers on top.
+  // Guarded by an "already firing" flag so the player.hp <= 0 condition
+  // doesn't re-trigger every frame while the video is playing.
+  function playDefeatCutscene() {
+    if (game.state === 'cutscene' || game.state === 'over') return;
+    const overlay = document.getElementById('defeatCutscene');
+    const video = document.getElementById('defeatCutsceneVideo');
+    if (!overlay || !video) {
+      // Fallback if cutscene element is missing — go straight to game over.
+      gameOver();
+      return;
+    }
+
+    // Pause gameplay
+    game.state = 'cutscene';
+
+    // Reveal overlay (no fade-in — instant cut to the cutscene)
+    overlay.classList.remove('hidden');
+    overlay.classList.remove('cutscene-fading');
+
+    // Unmute the video so its audio is audible. BGM keeps playing alongside.
+    video.muted = false;
+    video.volume = 1.0;
+    video.currentTime = 0;
+    video.play().catch(() => { /* if autoplay blocked, fall through to wrap */ });
+
+    // When the video ends (or fails), transition to game-over.
+    let wrapped = false;
+    const wrap = () => {
+      if (wrapped) return;
+      wrapped = true;
+      overlay.classList.add('cutscene-fading');
+      setTimeout(() => {
+        overlay.classList.add('hidden');
+        overlay.classList.remove('cutscene-fading');
+        // The cutscene already showed "Game Over" toward its end, so we
+        // hand off directly to the game-over overlay (which has the score
+        // card, share buttons, retry, etc.).
+        gameOver();
+      }, 600);
+    };
+    video.onended = wrap;
+    video.onerror = wrap;
+    // Safety timeout — if 'ended' never fires, end after the known duration
+    // + a half-second buffer.
+    setTimeout(wrap, 5500);
+  }
+
   function update(dt) {
     if (game.state !== 'play') return;
     game.time += dt;
@@ -2966,9 +3030,17 @@
     }
     game.shake = Math.max(0, game.shake - 60*dt);
 
-    // game over
+    // Game over. Two paths:
+    //   - Killed by the boss while bossActive => play the defeat cutscene first,
+    //     then show the regular game-over overlay when the video ends.
+    //   - Otherwise => go straight to game-over (regular clone deaths don't get
+    //     the cinematic treatment).
     if (player.hp <= 0) {
-      gameOver();
+      if (game.bossActive) {
+        playDefeatCutscene();
+      } else {
+        gameOver();
+      }
     }
 
     // reset edge triggers
@@ -4820,13 +4892,14 @@
     document.getElementById('gameover').classList.add('hidden');
     document.getElementById('pause').classList.add('hidden');
     document.getElementById('continue').classList.add('hidden');
-    // Force the boss cutscene video to start buffering NOW, not when the
-    // boss dies. This eliminates the playback lag the user was seeing.
-    // load() triggers the browser to fetch + decode the video so by the time
-    // play() is called later (50+ kills in), the file is fully ready in the
-    // media cache and playback begins on the next render frame.
-    const cutscene = document.getElementById('cutsceneVideo');
-    if (cutscene) { try { cutscene.load(); } catch (e) {} }
+    // Force both cutscene videos to start buffering NOW, not at trigger time.
+    // load() triggers the browser to fetch + decode each file so by the time
+    // play() is called later, they're fully ready in the media cache and
+    // playback begins on the next render frame (no buffering pause).
+    for (const id of ['cutsceneVideo', 'defeatCutsceneVideo']) {
+      const v = document.getElementById(id);
+      if (v) { try { v.load(); } catch (e) {} }
+    }
     // Show the loading screen and start streaming game assets. We hold a
     // minimum visible duration (600ms on fast / 250ms on slow because slow
     // users will already see the bar fill slowly) so the transition feels
