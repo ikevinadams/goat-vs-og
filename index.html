@@ -1021,16 +1021,39 @@
       //   a standing hero. spriteH = 200 (83% of hero) is the empirical sweet
       //   spot — clones read as recognizably the same person as the hero, but
       //   distinctly shorter in the frame because they're hunched forward.
-      // skitter — fast charger (Jeevan 2, brown leather). 2 HP, sprints toward player.
-      skitter: { hp: 2, w: 90, h: 200, speed: 380, score: 80, dmg: 14, melee: 90,
-                 color: '#3a3f4a', accent: '#ffae3d', spriteH: 200, isSkitter: true },
-      // gunner — standard ranged shooter (Jeevan 1, yellow shirt). 3 HP, walks + fires.
-      gunner:  { hp: 3, w: 90,  h: 200, speed: 130, score: 60, dmg: 8,  melee: 0,
-                 color: '#3a3f4a', accent: '#ffae3d', ranged: true, fireRate: 1.6, bulletSpeed: 750, spriteH: 200 },
-      // heavy — slow tank (Jeevan 3, grey workshirt). 9 HP, hits hard up close.
-      heavy:   { hp: 9, w: 90,  h: 200, speed: 90,  score: 150, dmg: 22, melee: 90,
-                 ranged: true, fireRate: 1.4, bulletSpeed: 700,
-                 color: '#3a3f4a', accent: '#ff5a1f', stomp: true, isHeavy: true, spriteH: 200 },
+      // ── Three distinct clone archetypes, all using pistols. Each one has
+      // its own niche so the player learns to read silhouettes and react:
+      //   skitter = FAST AGGRESSOR (low HP, point-blank shooter, rapid fire)
+      //   gunner  = BALANCED MID-RANGE (the workhorse, predictable threat)
+      //   heavy   = SLOW LONG-RANGE TANK (bullet-sponge, telegraphed shots)
+      // standoff = the world-pixel distance at which the bot stops advancing
+      // and starts firing. Smaller = aggressor, larger = sniper.
+
+      // skitter (Jeevan 2, brown leather) — rushes you and unloads close-up.
+      // Frail, easy to kill in 1-2 pistol shots, but DEADLY if you let him
+      // reach point-blank. Slow bullets give you a chance to dodge.
+      skitter: { hp: 2, w: 90, h: 200, speed: 380, score: 80, dmg: 5, melee: 0,
+                 color: '#3a3f4a', accent: '#ffae3d',
+                 ranged: true, standoff: 150, fireRate: 0.85, bulletSpeed: 600,
+                 spriteH: 200, isSkitter: true },
+
+      // gunner (Jeevan 1, yellow shirt) — the standard threat. Walks forward,
+      // fires from medium range. Predictable, balanced, the player learns
+      // his cadence early.
+      gunner:  { hp: 3, w: 90, h: 200, speed: 150, score: 60, dmg: 8, melee: 0,
+                 color: '#3a3f4a', accent: '#ffae3d',
+                 ranged: true, standoff: 280, fireRate: 1.5, bulletSpeed: 750,
+                 spriteH: 200 },
+
+      // heavy (Jeevan 3, grey workshirt) — slow approach, fires from long
+      // range with high-velocity bullets and big damage. 9 HP soaks up shots,
+      // so you can't ignore him while you fight the others. Standoff capped
+      // at 420px so even on a 1280-wide canvas he's never more than a third
+      // of the screen away — long range without being unfair.
+      heavy:   { hp: 9, w: 90, h: 200, speed: 80, score: 150, dmg: 16, melee: 0,
+                 color: '#3a3f4a', accent: '#ff5a1f',
+                 ranged: true, standoff: 420, fireRate: 2.2, bulletSpeed: 850,
+                 spriteH: 200, isHeavy: true },
       // Boss villain — scripted spawn, huge HP, big revolver shots.
       // Sized to match hero (playerSpriteH = 240) so they read as equals
       // visually rather than the boss towering over the hero.
@@ -3194,8 +3217,12 @@
       // (clones keep their spawn-time facing; no update here)
       const dist = Math.abs((player.x+player.w/2) - (e.x+e.w/2));
       if (def.ranged) {
-        // gunners hold a stand-off distance and shoot
-        const stand = 320;
+        // Each archetype holds its own standoff distance:
+        //   skitter ~150 (close, aggressive)
+        //   gunner  ~280 (medium, default)
+        //   heavy   ~420 (long, sniper)
+        // Boss falls back to 320 if not set in its own def.
+        const stand = def.standoff != null ? def.standoff : 320;
         // Boss gets a speed multiplier that scales with distance — if the
         // player runs to one side of the arena, the boss accelerates to
         // close the gap so he can never be left behind off-screen.
@@ -3211,7 +3238,15 @@
           if (e.x > arenaRightBoss) e.x = arenaRightBoss;
         }
         e.attackCooldown -= dt;
-        if (e.attackCooldown <= 0 && dist < 700 && game.state==='play') {
+        // Each archetype has its own engagement range — fires while the player
+        // is within (standoff + 200) so the firing zone naturally tiers:
+        //   skitter only fires when player is within ~350 (point-blank pressure)
+        //   gunner  fires within ~480 (medium presence)
+        //   heavy   fires within ~620 (long presence)
+        // If the player runs past the engagement range, the bot closes the gap
+        // before it can fire again.
+        const engageRange = stand + 200;
+        if (e.attackCooldown <= 0 && dist < engageRange && game.state==='play') {
           // Per-enemy stat overrides (set on boss spawn) fall back to def.
           const fireRate    = e.fireRate    != null ? e.fireRate    : def.fireRate;
           const bulletSpeed = e.bulletSpeed != null ? e.bulletSpeed : def.bulletSpeed;
