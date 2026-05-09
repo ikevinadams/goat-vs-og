@@ -515,6 +515,21 @@
     transform: scale(0.92);
     filter: brightness(1.25);
   }
+  /* Smaller crouch button stacked above jump. Subdued grey tint when
+     inactive; becomes bright cyan when toggled on so the player has a
+     clear visual indicator that they're crouched. */
+  .tc-btn.tc-btn-small {
+    width: 64px; height: 64px;
+    font-size: 11px;
+    align-self: center;   /* visually centered relative to the larger jump btn */
+  }
+  .tc-btn.crouch {
+    background: radial-gradient(circle at 35% 35%, rgba(150,160,180,0.85), rgba(80,90,110,0.95) 70%, rgba(40,46,58,1));
+  }
+  .tc-btn.crouch.active {
+    background: radial-gradient(circle at 35% 35%, rgba(120,220,255,0.95), rgba(40,150,210,0.95) 70%, rgba(15,80,130,1));
+    box-shadow: 0 0 18px rgba(120,200,255,0.55), 0 0 0 2px rgba(255,255,255,0.65) inset;
+  }
 
   /* --- Weapon switcher row (top-center) --- */
   #tc-weapons {
@@ -916,6 +931,9 @@
       <div id="tc-aim-zone"></div>
 
       <div class="tc-action-stack">
+        <!-- Crouch sits ABOVE jump as a smaller, subdued toggle button.
+             Mobile-only behavior: tap to crouch, tap again to stand. -->
+        <button class="tc-btn tc-btn-small crouch" id="tc-crouch" aria-label="Crouch toggle">CROUCH</button>
         <button class="tc-btn jump" id="tc-jump">JUMP</button>
       </div>
     </div>
@@ -2172,6 +2190,7 @@
     const stickThumb = document.getElementById('tc-stick-thumb');
     const aimZone    = document.getElementById('tc-aim-zone');
     const jumpBtn    = document.getElementById('tc-jump');
+    const crouchBtn  = document.getElementById('tc-crouch');
     const pauseBtn   = document.getElementById('tc-pause');
     const wpnBtns    = document.querySelectorAll('.tc-wbtn');
 
@@ -2310,6 +2329,26 @@
     jumpBtn.addEventListener('touchstart',  pressJump,   { passive: false });
     jumpBtn.addEventListener('touchend',    releaseJump, { passive: false });
     jumpBtn.addEventListener('touchcancel', releaseJump, { passive: false });
+
+    // --- CROUCH button (mobile only — TOGGLE behavior) ---
+    // Unlike the PC Shift key which is a HOLD, on mobile crouch toggles on/off
+    // with each tap. Tap once → crouch (input.crouch stays true until next
+    // tap). Tap again → stand. The toggle's truth-state is read from the
+    // button's .active class, so resetRun() can clear it cleanly via DOM.
+    function toggleCrouch(e) {
+      e.preventDefault();
+      const wasActive = crouchBtn.classList.contains('active');
+      if (wasActive) {
+        crouchBtn.classList.remove('active');
+        input.crouch = false;
+      } else {
+        crouchBtn.classList.add('active');
+        input.crouch = true;
+      }
+    }
+    if (crouchBtn) {
+      crouchBtn.addEventListener('touchstart', toggleCrouch, { passive: false });
+    }
 
     // --- Weapon switcher ---
     wpnBtns.forEach(btn => {
@@ -4973,6 +5012,12 @@
     game.kills = 0; game.score = 0;
     game.combo = 0; game.comboTimer = 0;
     game.stageBanner = null;
+    // Clear the mobile crouch-toggle state so a fresh run doesn't start
+    // already crouched if the previous run ended with the toggle on.
+    input.crouch = false;
+    input.down = false;
+    const crouchBtn = document.getElementById('tc-crouch');
+    if (crouchBtn) crouchBtn.classList.remove('active');
     game.weaponsUnlocked = { pistol: true, smg: false, rocket: false };
     game.ammo = { pistol: Infinity, smg: 0, rocket: 0 };
     game.state = 'play';
