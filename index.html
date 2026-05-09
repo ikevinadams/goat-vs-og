@@ -84,7 +84,16 @@
   .cutscene-video {
     width: 100%;
     height: 100%;
-    object-fit: contain;   /* preserves aspect ratio; black bars fill mismatched sides */
+    /* object-fit: cover scales the video to FILL the viewport while
+       preserving aspect ratio, center-cropping any overflow. The cutscene
+       videos are 2.36:1 ultrawide; on a standard 16:9 laptop screen this
+       crops ~315px off each side instead of showing letterbox black bars
+       (which `contain` would do). The action is centered so the side crop
+       reads cleanly. On true ultrawide displays (21:9 = 2.33:1, very close
+       to 2.36:1), there's almost no crop and the full panorama plays.
+       Auto-adapts to any aspect ratio without separate video files. */
+    object-fit: cover;
+    object-position: center center;
     background: #000;
   }
   .panel {
