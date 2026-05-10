@@ -1,0 +1,1205 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Fevicol Forever — Mistry & Chela</title>
+<style>
+:root{
+  --wood-dark:#2c1a0a;
+  --wood-mid:#7a4a22;
+  --wood-light:#c08854;
+  --glue-yellow:#f7c948;
+  --glue-amber:#e8951a;
+  --glue-deep:#a55a05;
+  --paper:#f4e6c8;
+  --ink:#231505;
+  --danger:#c4341a;
+  --mistry:#d24233;
+  --chela:#2f6cd2;
+  --sky:#fbe7b8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0;height:100%;background:#120a04;overflow:hidden;font-family:"Trebuchet MS","Helvetica Neue",sans-serif;color:var(--ink);user-select:none}
+#game{display:block;position:fixed;inset:0;background:#1c1208;cursor:default}
+.overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center, rgba(122,74,34,0.88), rgba(18,10,4,0.96));pointer-events:none;opacity:0;transition:opacity 0.35s;z-index:10}
+.overlay.show{opacity:1;pointer-events:auto}
+.card{background:var(--paper);padding:30px 38px;border-radius:14px;box-shadow:0 14px 50px rgba(0,0,0,0.6), inset 0 0 0 4px var(--glue-deep), inset 0 0 0 8px var(--paper);max-width:580px;text-align:center;position:relative}
+.card::before, .card::after{content:"";position:absolute;width:50px;height:14px;background:var(--glue-amber);border-radius:50%/100%;opacity:0.55}
+.card::before{top:-6px;left:30px;transform:rotate(-5deg)}
+.card::after{bottom:-6px;right:40px;transform:rotate(8deg)}
+.card h1{margin:0 0 8px;font-size:46px;font-weight:900;letter-spacing:1px;color:var(--glue-deep);text-shadow:3px 3px 0 var(--wood-mid), 5px 5px 0 rgba(0,0,0,0.18)}
+.card h2{margin:0 0 12px;font-size:26px;color:var(--wood-dark)}
+.card p{margin:8px 0;font-size:16px;line-height:1.5}
+.tag{display:inline-block;background:var(--glue-yellow);color:var(--ink);padding:4px 12px;border-radius:99px;font-size:12px;font-weight:800;margin-bottom:10px;letter-spacing:0.8px;text-transform:uppercase;border:2px solid var(--glue-deep)}
+.btn{display:inline-block;margin-top:16px;background:var(--glue-deep);color:#fff;padding:11px 26px;border-radius:8px;border:none;font-weight:800;font-size:16px;cursor:pointer;letter-spacing:0.8px;text-transform:uppercase;box-shadow:0 4px 0 #5a2f02;transition:transform 0.08s, box-shadow 0.08s;font-family:inherit}
+.btn:hover{filter:brightness(1.1)}
+.btn:active{transform:translateY(2px);box-shadow:0 2px 0 #5a2f02}
+.controls{margin-top:16px;font-size:13px;color:var(--wood-dark);line-height:1.9}
+.controls kbd{background:#fff;padding:2px 8px;border-radius:4px;border:1px solid var(--wood-mid);font-family:monospace;font-size:12px;font-weight:700;color:var(--wood-dark);box-shadow:0 1px 0 var(--wood-mid)}
+.hud{position:fixed;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;align-items:flex-start;pointer-events:none;z-index:5;color:var(--paper);font-weight:800}
+.hud .group{display:flex;gap:8px;align-items:center}
+.pill{background:rgba(0,0,0,0.5);padding:6px 13px;border-radius:99px;font-size:13px;letter-spacing:0.4px;border:1.5px solid rgba(247,201,72,0.35);text-shadow:0 1px 0 #000}
+.pill.buddy{display:flex;align-items:center;gap:6px}
+.pill.buddy .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.pill.buddy.active{background:var(--glue-deep);border-color:var(--glue-yellow);box-shadow:0 0 12px rgba(247,201,72,0.5)}
+.pill.buddy.stuck::after{content:"●";color:var(--glue-yellow);margin-left:4px;font-size:14px}
+.pill.buddy.unstuck::after{content:"○";color:rgba(255,255,255,0.55);margin-left:4px;font-size:14px}
+.hint{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);color:var(--paper);font-size:14px;background:rgba(0,0,0,0.65);padding:9px 16px;border-radius:99px;z-index:5;pointer-events:none;text-shadow:0 1px 0 #000;border:1px solid rgba(247,201,72,0.3);max-width:80%;text-align:center;opacity:0;transition:opacity 0.4s}
+.hint.show{opacity:1}
+.hint kbd{background:var(--glue-yellow);color:var(--ink);padding:1px 7px;border-radius:3px;font-family:monospace;font-size:12px;font-weight:800;margin:0 2px;border:1px solid var(--glue-deep)}
+.toast{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:var(--glue-deep);color:#fff;padding:8px 18px;border-radius:99px;font-weight:800;letter-spacing:1px;text-transform:uppercase;z-index:6;opacity:0;transition:opacity 0.3s, transform 0.3s;pointer-events:none}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(8px)}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div class="hud" id="hud" style="display:none">
+  <div class="group">
+    <div class="pill" id="pill-level">Level 1</div>
+    <div class="pill" id="pill-attempts">Tries: 0</div>
+  </div>
+  <div class="group">
+    <div class="pill buddy active stuck" id="pill-mistry"><span class="dot" style="background:var(--mistry)"></span>MISTRY <kbd style="font-size:10px;padding:1px 5px;background:#fff;color:#000;border-radius:3px;font-weight:800">1</kbd></div>
+    <div class="pill buddy unstuck" id="pill-chela"><span class="dot" style="background:var(--chela)"></span>CHELA <kbd style="font-size:10px;padding:1px 5px;background:#fff;color:#000;border-radius:3px;font-weight:800">2</kbd></div>
+  </div>
+</div>
+<div class="hint" id="hint"></div>
+<div class="toast" id="toast"></div>
+
+<div class="overlay show" id="overlay-title">
+  <div class="card">
+    <div class="tag">A Brand: Fevicol</div>
+    <h1>FEVICOL FOREVER</h1>
+    <h2>Mistry &amp; Chela</h2>
+    <p>Two carpenters. One unbreakable bond.<br>Cross every workshop hazard by sticking, swinging, and unsticking — together.</p>
+    <p class="controls">
+      <kbd>1</kbd>/<kbd>2</kbd> switch buddy<br>
+      <kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> walk &nbsp;·&nbsp; <kbd>W</kbd> / <kbd>↑</kbd> jump<br>
+      <kbd>SPACE</kbd> stick / unstick &nbsp;·&nbsp; <kbd>R</kbd> retry level
+    </p>
+    <button class="btn" id="btn-start">Start</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-intro">
+  <div class="card">
+    <div class="tag" id="intro-tag">Level 1 of 5</div>
+    <h2 id="intro-title">The Workbench</h2>
+    <p id="intro-desc">A flat workbench with a chasm. Inchworm across.</p>
+    <p id="intro-tip" style="font-size:14px;color:var(--glue-deep);font-weight:700"></p>
+    <button class="btn" id="btn-intro">Begin</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-win-level">
+  <div class="card">
+    <div class="tag">Level Complete</div>
+    <h2 id="win-title">Bonded!</h2>
+    <p id="win-stats"></p>
+    <button class="btn" id="btn-next">Next Level</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-win-game">
+  <div class="card">
+    <div class="tag">Mission Complete</div>
+    <h1 style="font-size:36px">UNBREAKABLE</h1>
+    <p>Mistry &amp; Chela conquer the workshop. The bond holds.<br><em>Yeh Fevicol ka jod hai.</em></p>
+    <p id="final-stats"></p>
+    <button class="btn" id="btn-replay">Play Again</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ===========================================================
+// CANVAS / DPR
+// ===========================================================
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+let dpr = 1;
+
+function resize(){
+  dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.floor(window.innerWidth  * dpr);
+  canvas.height = Math.floor(window.innerHeight * dpr);
+  canvas.style.width  = window.innerWidth + "px";
+  canvas.style.height = window.innerHeight + "px";
+}
+window.addEventListener("resize", resize);
+resize();
+
+// World design space
+const WORLD_W = 1280, WORLD_H = 720;
+function viewTransform(){
+  const sx = window.innerWidth  / WORLD_W;
+  const sy = window.innerHeight / WORLD_H;
+  const s = Math.min(sx, sy);
+  const ox = (window.innerWidth  - WORLD_W * s) * 0.5;
+  const oy = (window.innerHeight - WORLD_H * s) * 0.5;
+  return { s, ox, oy };
+}
+
+// ===========================================================
+// LEVELS
+// ===========================================================
+// Tile kinds:
+//   wood  - solid + stickable (default workshop wood)
+//   metal - solid + stickable but slick
+//   oil   - solid but NOT stickable (Fevicol can't grab oil!)
+//   sticky- solid + extra-tacky bonus pad (visual highlight)
+// Hazards: spinning saws (circle, x,y,r) — touch = retry
+// Exits: a giant Fevicol tube; both buddies must touch to win
+
+const LEVELS = [
+  // ========= LEVEL 1 — TUTORIAL =========
+  {
+    title:"The Workbench",
+    desc:"A long workbench split by a chasm. Anchor one buddy, walk the other across.",
+    tip:"Stick MISTRY first. Then switch to CHELA and walk to the gap — let the bond pull you across.",
+    spawn:[{x:140,y:480},{x:200,y:480}],
+    exit:{x:1140,y:430,w:80,h:120},
+    tiles:[
+      {x:0,   y:0,   w:1280, h:30,  kind:"wood"},  // ceiling
+      {x:0,   y:0,   w:30,   h:720, kind:"wood"},  // left wall
+      {x:1250,y:0,   w:30,   h:720, kind:"wood"},  // right wall
+      {x:0,   y:540, w:560,  h:180, kind:"wood"},  // left bench
+      {x:760, y:540, w:520,  h:180, kind:"wood"},  // right bench
+      {x:0,   y:680, w:1280, h:40,  kind:"wood"},  // floor catch (under)
+      {x:280, y:200, w:80,   h:30,  kind:"sticky"},// ceiling pad to demo stickiness
+    ],
+    hazards:[],
+  },
+
+  // ========= LEVEL 2 — SAWDUST & SAWS =========
+  {
+    title:"Sawdust & Saws",
+    desc:"Spinning blades on the floor. Use the ceiling pads to swing past.",
+    tip:"Stick to a CEILING pad and let the other buddy swing freely below. Build momentum, then unstick.",
+    spawn:[{x:120,y:480},{x:170,y:480}],
+    exit:{x:1140,y:430,w:80,h:120},
+    tiles:[
+      {x:0,   y:0,   w:1280, h:30,  kind:"wood"},
+      {x:0,   y:0,   w:30,   h:720, kind:"wood"},
+      {x:1250,y:0,   w:30,   h:720, kind:"wood"},
+      {x:0,   y:540, w:280,  h:180, kind:"wood"},
+      {x:1000,y:540, w:280,  h:180, kind:"wood"},
+      // mid floor — narrow safe islands between saws
+      {x:430, y:600, w:90,   h:120, kind:"wood"},
+      {x:760, y:600, w:90,   h:120, kind:"wood"},
+      // ceiling sticky pads
+      {x:300, y:30,  w:90,   h:24,  kind:"sticky"},
+      {x:560, y:30,  w:90,   h:24,  kind:"sticky"},
+      {x:840, y:30,  w:90,   h:24,  kind:"sticky"},
+    ],
+    hazards:[
+      {x:380, y:600, r:36},
+      {x:660, y:600, r:36},
+      {x:940, y:600, r:36},
+    ],
+  },
+
+  // ========= LEVEL 3 — THE CLIMB =========
+  {
+    title:"The Vertical Climb",
+    desc:"Inchworm up the wall. Beware oil patches — Fevicol can't grab oil.",
+    tip:"Alternate sticks: anchor → switch → swing up → anchor → repeat. Avoid the slick green OIL panels.",
+    spawn:[{x:180,y:620},{x:230,y:620}],
+    exit:{x:1080,y:50,w:80,h:120},
+    tiles:[
+      {x:0,   y:0,   w:1280, h:30,  kind:"wood"},
+      {x:0,   y:0,   w:30,   h:720, kind:"wood"},
+      {x:1250,y:0,   w:30,   h:720, kind:"wood"},
+      {x:0,   y:680, w:1280, h:40,  kind:"wood"},
+      // ascending platforms (zig-zag right wall)
+      {x:280, y:600, w:160, h:24, kind:"wood"},
+      {x:520, y:520, w:160, h:24, kind:"oil"},   // first oil — must time it
+      {x:280, y:440, w:160, h:24, kind:"wood"},
+      {x:520, y:360, w:160, h:24, kind:"wood"},
+      {x:760, y:300, w:160, h:24, kind:"oil"},
+      {x:520, y:230, w:160, h:24, kind:"wood"},
+      {x:760, y:160, w:160, h:24, kind:"sticky"},
+      {x:1000,y:170, w:240, h:24, kind:"wood"}, // exit ledge
+    ],
+    hazards:[],
+  },
+
+  // ========= LEVEL 4 — THE PENDULUM =========
+  {
+    title:"The Pendulum",
+    desc:"No floor. Only ceiling. Tarzan across.",
+    tip:"Stick to a ceiling pad with one buddy. Swing the other to the next pad. Switch and repeat.",
+    spawn:[{x:130,y:240},{x:180,y:240}],
+    exit:{x:1140,y:170,w:80,h:120},
+    tiles:[
+      {x:0,   y:0,   w:1280, h:30,  kind:"wood"},
+      {x:0,   y:0,   w:40,   h:300, kind:"wood"},
+      {x:1240,y:0,   w:40,   h:300, kind:"wood"},
+      // start ledge
+      {x:40,  y:280, w:160,  h:20,  kind:"wood"},
+      // exit ledge
+      {x:1080,y:280, w:160,  h:20,  kind:"wood"},
+      // ceiling sticky pads (the swing route)
+      {x:260, y:30,  w:90,   h:22,  kind:"sticky"},
+      {x:430, y:30,  w:90,   h:22,  kind:"sticky"},
+      {x:610, y:30,  w:90,   h:22,  kind:"sticky"},
+      {x:790, y:30,  w:90,   h:22,  kind:"sticky"},
+      {x:960, y:30,  w:90,   h:22,  kind:"sticky"},
+      // pit floor (visual only — instant retry zone, see deathY)
+      {x:0,   y:700, w:1280, h:20,  kind:"oil"},
+    ],
+    hazards:[],
+    deathY: 660, // falling past this = retry
+  },
+
+  // ========= LEVEL 5 — THE BOSS TUBE =========
+  {
+    title:"The Boss Tube",
+    desc:"Saws, oil, ceiling pads, a vertical finish. Reach the giant Fevicol tube.",
+    tip:"Everything you've learned. Take it slow. The tube awaits.",
+    spawn:[{x:120,y:620},{x:170,y:620}],
+    exit:{x:1080,y:50,w:100,h:140},
+    tiles:[
+      {x:0,   y:0,   w:1280, h:30,  kind:"wood"},
+      {x:0,   y:0,   w:30,   h:720, kind:"wood"},
+      {x:1250,y:0,   w:30,   h:720, kind:"wood"},
+      {x:0,   y:680, w:1280, h:40,  kind:"wood"},
+      // start bench
+      {x:30,  y:600, w:240,  h:100, kind:"wood"},
+      // ground islands between saws
+      {x:430, y:640, w:100,  h:40,  kind:"wood"},
+      {x:670, y:640, w:100,  h:40,  kind:"oil"},
+      {x:910, y:640, w:120,  h:40,  kind:"wood"},
+      // mid level platforms
+      {x:200, y:500, w:140,  h:22,  kind:"wood"},
+      {x:430, y:440, w:140,  h:22,  kind:"oil"},
+      {x:670, y:380, w:140,  h:22,  kind:"wood"},
+      {x:910, y:320, w:140,  h:22,  kind:"sticky"},
+      // ceiling pads (alt route)
+      {x:300, y:30,  w:80,   h:22,  kind:"sticky"},
+      {x:520, y:30,  w:80,   h:22,  kind:"sticky"},
+      {x:760, y:30,  w:80,   h:22,  kind:"sticky"},
+      // exit ledge
+      {x:1010,y:200, w:240,  h:22,  kind:"wood"},
+    ],
+    hazards:[
+      {x:380, y:640, r:34},
+      {x:600, y:640, r:34},
+      {x:840, y:640, r:34},
+    ],
+  },
+];
+
+// ===========================================================
+// GAME STATE
+// ===========================================================
+const G_GRAV = 1900;        // px/s^2
+const BOND_LEN = 110;       // hard max
+const BOND_REST = 80;
+const BOND_K = 9;           // soft pull constant
+const BUDDY_R = 16;
+const MOVE_SPEED = 280;
+const MOVE_ACCEL_AIR = 600;
+const JUMP_VEL = 720;
+const FRICTION = 0.82;
+const AIR_DRAG = 0.992;
+const HAZARD_R_PAD = 4;     // forgiveness on saw collision
+
+let state = "title"; // title | intro | playing | level_win | game_win
+let levelIdx = 0;
+let attempts = 0;
+let totalAttempts = 0;
+let levelStartTime = 0;
+let levelTimes = [];
+
+const buddies = [
+  { id:0, name:"MISTRY", color:"#d24233", hatColor:"#7a1f15",
+    x:0, y:0, vx:0, vy:0, stuck:false, onGround:false,
+    blink:0, lookDir:1, sawdust:0 },
+  { id:1, name:"CHELA",  color:"#2f6cd2", hatColor:"#163e7a",
+    x:0, y:0, vx:0, vy:0, stuck:false, onGround:false,
+    blink:0, lookDir:1, sawdust:0 },
+];
+let activeId = 0;
+const bud = (i) => buddies[i];
+const A = () => buddies[activeId];
+
+// particles
+const particles = [];
+function emitGlue(x, y, color="#f7c948", n=8, vrange=180){
+  for (let i = 0; i < n; i++){
+    const a = Math.random() * Math.PI * 2;
+    const v = (0.3 + Math.random()*0.7) * vrange;
+    particles.push({
+      x, y,
+      vx: Math.cos(a)*v, vy: Math.sin(a)*v - 60,
+      life: 0.5 + Math.random()*0.5,
+      max: 0.9, color, r: 2 + Math.random()*3, g:1
+    });
+  }
+}
+function emitDust(x, y, n=6){
+  for (let i = 0; i < n; i++){
+    const a = -Math.PI/2 + (Math.random()-0.5)*1.5;
+    const v = 60 + Math.random()*120;
+    particles.push({
+      x, y,
+      vx: Math.cos(a)*v, vy: Math.sin(a)*v,
+      life: 0.4 + Math.random()*0.4,
+      max: 0.7, color:"#d8b88a", r: 2 + Math.random()*2, g:0.4
+    });
+  }
+}
+function updateParticles(dt){
+  for (let i = particles.length - 1; i >= 0; i--){
+    const p = particles[i];
+    p.life -= dt;
+    if (p.life <= 0){ particles.splice(i, 1); continue; }
+    p.vy += 800 * p.g * dt;
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+  }
+}
+
+// input
+const keys = {};
+const justPressed = new Set();
+window.addEventListener("keydown", (e) => {
+  if (e.repeat) return;
+  const k = e.key.toLowerCase();
+  keys[k] = true;
+  justPressed.add(k);
+  // prevent space/arrow from scrolling
+  if ([" ","arrowup","arrowdown","arrowleft","arrowright"].includes(k)) e.preventDefault();
+}, {passive:false});
+window.addEventListener("keyup", (e) => { keys[e.key.toLowerCase()] = false; });
+
+// ===========================================================
+// LEVEL LOAD / RESET
+// ===========================================================
+function loadLevel(idx){
+  const lv = LEVELS[idx];
+  buddies[0].x = lv.spawn[0].x; buddies[0].y = lv.spawn[0].y;
+  buddies[1].x = lv.spawn[1].x; buddies[1].y = lv.spawn[1].y;
+  for (const b of buddies){
+    b.vx = 0; b.vy = 0; b.stuck = false; b.onGround = false;
+    b.blink = Math.random()*4; b.lookDir = 1;
+  }
+  activeId = 0;
+  particles.length = 0;
+  attempts = 0;
+  levelStartTime = performance.now();
+  updateHUD();
+}
+
+function softReset(){
+  const lv = LEVELS[levelIdx];
+  buddies[0].x = lv.spawn[0].x; buddies[0].y = lv.spawn[0].y;
+  buddies[1].x = lv.spawn[1].x; buddies[1].y = lv.spawn[1].y;
+  for (const b of buddies){
+    b.vx = 0; b.vy = 0; b.stuck = false;
+  }
+  activeId = 0;
+  attempts++;
+  totalAttempts++;
+  emitGlue(buddies[0].x, buddies[0].y, "#d24233", 12, 220);
+  emitGlue(buddies[1].x, buddies[1].y, "#2f6cd2", 12, 220);
+  updateHUD();
+}
+
+// ===========================================================
+// PHYSICS / COLLISION
+// ===========================================================
+function aabbCircleOverlap(rect, cx, cy, cr){
+  const nx = Math.max(rect.x, Math.min(cx, rect.x + rect.w));
+  const ny = Math.max(rect.y, Math.min(cy, rect.y + rect.h));
+  const dx = cx - nx, dy = cy - ny;
+  const d2 = dx*dx + dy*dy;
+  if (d2 < cr*cr){
+    const d = Math.sqrt(d2) || 0.0001;
+    return { nx: dx/d, ny: dy/d, depth: cr - d, contactX:nx, contactY:ny };
+  }
+  return null;
+}
+
+function tryStick(b, lv){
+  // Check tiles within reach for a stickable surface
+  let bestTile = null;
+  let bestDist = 9999;
+  let bestNx = 0, bestNy = 0;
+  for (const t of lv.tiles){
+    if (t.kind === "oil") continue; // oil = no stick
+    const hit = aabbCircleOverlap(t, b.x, b.y, BUDDY_R + 3);
+    if (hit){
+      const d = -hit.depth; // negative = overlap; smaller (closer to 0) is closer to surface
+      if (Math.abs(d) < bestDist){
+        bestDist = Math.abs(d);
+        bestTile = t;
+        bestNx = hit.nx;
+        bestNy = hit.ny;
+      }
+    }
+  }
+  if (bestTile){
+    b.stuck = true;
+    b.vx = 0; b.vy = 0;
+    emitGlue(b.x + bestNx*BUDDY_R*0.5, b.y + bestNy*BUDDY_R*0.5,
+             "#f7c948", 12, 200);
+    showToast(`${b.name} STUCK!`);
+    return true;
+  }
+  showToast(`${b.name} — nothing to grab`);
+  return false;
+}
+
+function unstick(b){
+  b.stuck = false;
+  emitGlue(b.x, b.y, "#e8951a", 8, 140);
+  showToast(`${b.name} FREE`);
+}
+
+function collideBuddyWithTiles(b, lv){
+  b.onGround = false;
+  for (const t of lv.tiles){
+    const hit = aabbCircleOverlap(t, b.x, b.y, BUDDY_R);
+    if (hit){
+      b.x += hit.nx * hit.depth;
+      b.y += hit.ny * hit.depth;
+      // velocity projection: zero component along normal
+      const vDot = b.vx * hit.nx + b.vy * hit.ny;
+      if (vDot < 0){
+        b.vx -= hit.nx * vDot;
+        b.vy -= hit.ny * vDot;
+      }
+      // detect ground
+      if (hit.ny < -0.5){
+        if (!b.onGround && b.vy >= -50){
+          // landing — emit dust
+          emitDust(b.x, b.y + BUDDY_R, 5);
+        }
+        b.onGround = true;
+        b.surfaceKind = t.kind;
+        // friction along ground
+        if (t.kind === "oil"){
+          b.vx *= 0.995; // very slick
+        } else {
+          b.vx *= FRICTION;
+        }
+      }
+    }
+  }
+}
+
+function bondSpring(dt){
+  const a = buddies[0], b = buddies[1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.hypot(dx, dy);
+  if (d < 0.0001) return;
+  const nx = dx / d, ny = dy / d;
+  if (d > BOND_REST){
+    const stretch = d - BOND_REST;
+    const f = stretch * BOND_K;
+    if (!a.stuck){ a.vx += nx * f * dt; a.vy += ny * f * dt; }
+    if (!b.stuck){ b.vx -= nx * f * dt; b.vy -= ny * f * dt; }
+  }
+}
+
+function bondConstraint(){
+  const a = buddies[0], b = buddies[1];
+  const dx = b.x - a.x, dy = b.y - a.y;
+  let d = Math.hypot(dx, dy);
+  if (d < 0.0001) return;
+  const nx = dx / d, ny = dy / d;
+
+  // Hard max
+  if (d > BOND_LEN){
+    const excess = d - BOND_LEN;
+    if (a.stuck && !b.stuck){
+      b.x -= nx * excess; b.y -= ny * excess;
+      const v = b.vx * nx + b.vy * ny;
+      if (v > 0){ b.vx -= nx * v; b.vy -= ny * v; }
+    } else if (b.stuck && !a.stuck){
+      a.x += nx * excess; a.y += ny * excess;
+      const v = a.vx * (-nx) + a.vy * (-ny);
+      if (v > 0){ a.vx -= -nx * v; a.vy -= -ny * v; }
+    } else if (!a.stuck && !b.stuck){
+      a.x += nx * excess * 0.5; a.y += ny * excess * 0.5;
+      b.x -= nx * excess * 0.5; b.y -= ny * excess * 0.5;
+      const v1 = a.vx * nx + a.vy * ny;
+      const v2 = b.vx * nx + b.vy * ny;
+      const avg = (v1 + v2) * 0.5;
+      a.vx += nx * (avg - v1); a.vy += ny * (avg - v1);
+      b.vx += nx * (avg - v2); b.vy += ny * (avg - v2);
+    }
+  }
+}
+
+function checkHazards(lv){
+  for (const b of buddies){
+    for (const h of (lv.hazards||[])){
+      const dx = b.x - h.x, dy = b.y - h.y;
+      const r = h.r + BUDDY_R - HAZARD_R_PAD;
+      if (dx*dx + dy*dy < r*r){
+        return true;
+      }
+    }
+    if (lv.deathY != null && b.y > lv.deathY) return true;
+  }
+  return false;
+}
+
+function checkExit(lv){
+  // both buddies must overlap exit rect
+  const both = buddies.every(b => {
+    return b.x > lv.exit.x - BUDDY_R*0.5 &&
+           b.x < lv.exit.x + lv.exit.w + BUDDY_R*0.5 &&
+           b.y > lv.exit.y - BUDDY_R*0.5 &&
+           b.y < lv.exit.y + lv.exit.h + BUDDY_R*0.5;
+  });
+  return both;
+}
+
+// ===========================================================
+// UPDATE LOOP
+// ===========================================================
+let lastT = 0;
+let physicsDt = 1/60;
+let sawAngle = 0;
+
+function step(now){
+  const dtRaw = lastT ? (now - lastT) / 1000 : 0;
+  lastT = now;
+  let dt = Math.min(dtRaw, 1/30);
+
+  if (state === "playing"){
+    physicsDt = dt;
+    sawAngle += dt * 11;
+
+    const lv = LEVELS[levelIdx];
+
+    // Input — switch active
+    if (justPressed.has("1")) activeId = 0;
+    if (justPressed.has("2")) activeId = 1;
+    if (justPressed.has("tab")) activeId = 1 - activeId;
+
+    // Stick toggle on active
+    if (justPressed.has(" ")){
+      const a = A();
+      if (a.stuck) unstick(a);
+      else tryStick(a, lv);
+    }
+
+    // Retry
+    if (justPressed.has("r")) softReset();
+
+    // Move active
+    const a = A();
+    let moveX = 0;
+    if (keys["a"] || keys["arrowleft"])  moveX -= 1;
+    if (keys["d"] || keys["arrowright"]) moveX += 1;
+    if (moveX !== 0) a.lookDir = moveX;
+
+    if (!a.stuck){
+      if (a.onGround){
+        const targetVx = moveX * MOVE_SPEED;
+        a.vx += (targetVx - a.vx) * Math.min(1, dt * 12);
+        if ((justPressed.has("w") || justPressed.has("arrowup")) ){
+          a.vy = -JUMP_VEL;
+          a.onGround = false;
+          emitDust(a.x, a.y + BUDDY_R, 4);
+        }
+      } else {
+        // air control
+        a.vx += moveX * MOVE_ACCEL_AIR * dt;
+        if (Math.abs(a.vx) > MOVE_SPEED * 1.6) a.vx = Math.sign(a.vx) * MOVE_SPEED * 1.6;
+      }
+    }
+
+    // Physics — gravity + integrate for non-stuck buddies
+    for (const b of buddies){
+      if (b.stuck) continue;
+      b.vy += G_GRAV * dt;
+      b.vx *= AIR_DRAG;
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+    }
+
+    // Bond: spring once, hard constraint a few times for stability
+    bondSpring(dt);
+    for (let i = 0; i < 3; i++) bondConstraint();
+
+    // Collide buddies with tiles
+    for (const b of buddies) collideBuddyWithTiles(b, lv);
+
+    // Hazards / death
+    if (checkHazards(lv)){
+      emitGlue(buddies[0].x, buddies[0].y, "#d24233", 16, 280);
+      emitGlue(buddies[1].x, buddies[1].y, "#2f6cd2", 16, 280);
+      softReset();
+    }
+
+    // Exit
+    if (checkExit(lv)){
+      const t = (performance.now() - levelStartTime) / 1000;
+      levelTimes[levelIdx] = t;
+      onLevelWin(t);
+    }
+
+    // Eye-tracking blink + sawdust counter
+    for (const b of buddies){
+      b.blink -= dt;
+      if (b.blink < -0.12) b.blink = 3 + Math.random()*3;
+    }
+
+    updateHUD();
+  }
+
+  updateParticles(dt);
+  justPressed.clear();
+  render();
+  requestAnimationFrame(step);
+}
+
+// ===========================================================
+// RENDER
+// ===========================================================
+function render(){
+  ctx.save();
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+  const t = viewTransform();
+  ctx.save();
+  ctx.translate(t.ox, t.oy);
+  ctx.scale(t.s, t.s);
+
+  // World background
+  drawWorkshopBackground();
+
+  if (state === "playing" || state === "level_win" || state === "game_win"){
+    const lv = LEVELS[levelIdx];
+
+    // tiles
+    for (const tile of lv.tiles) drawTile(tile);
+
+    // exit (giant Fevicol tube)
+    drawExit(lv.exit);
+
+    // hazards
+    for (const h of (lv.hazards||[])) drawSaw(h.x, h.y, h.r, sawAngle);
+
+    // bond
+    drawBond(buddies[0], buddies[1]);
+
+    // buddies
+    drawBuddy(buddies[0], activeId === 0);
+    drawBuddy(buddies[1], activeId === 1);
+
+    // particles
+    drawParticles();
+  }
+
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawWorkshopBackground(){
+  // gradient sky
+  const grad = ctx.createLinearGradient(0, 0, 0, WORLD_H);
+  grad.addColorStop(0, "#3d2511");
+  grad.addColorStop(0.5, "#5e3a1b");
+  grad.addColorStop(1, "#2c1a0a");
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+  // back-wall planks
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  for (let x = -20; x < WORLD_W; x += 110){
+    ctx.fillStyle = ((x/110)|0) % 2 ? "#3a230f" : "#48311a";
+    ctx.fillRect(x, 0, 100, WORLD_H);
+    ctx.strokeStyle = "#1c100600";
+    ctx.fillStyle = "rgba(0,0,0,0.18)";
+    ctx.fillRect(x + 100, 0, 8, WORLD_H);
+  }
+  ctx.restore();
+
+  // hanging tools (decorative)
+  drawHangingTool(140, 0, "saw");
+  drawHangingTool(360, 0, "hammer");
+  drawHangingTool(900, 0, "wrench");
+  drawHangingTool(1140, 0, "saw");
+
+  // Fevicol poster (simple)
+  drawFevicolPoster(620, 80, 130, 90);
+
+  // sawdust on floor
+  ctx.save();
+  ctx.fillStyle = "rgba(216,184,138,0.18)";
+  for (let i = 0; i < 60; i++){
+    const x = (i * 73) % WORLD_W;
+    const y = 660 + ((i*31) % 30);
+    ctx.fillRect(x, y, 3, 2);
+  }
+  ctx.restore();
+}
+
+function drawHangingTool(x, top, kind){
+  ctx.save();
+  ctx.strokeStyle = "rgba(0,0,0,0.5)";
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(x, top);
+  ctx.lineTo(x, top + 50);
+  ctx.stroke();
+  ctx.translate(x, top + 50);
+  ctx.globalAlpha = 0.55;
+  if (kind === "saw"){
+    ctx.fillStyle = "#aab0b6";
+    ctx.beginPath();
+    ctx.moveTo(-26, 0);
+    ctx.lineTo(26, 0);
+    ctx.lineTo(20, 22);
+    ctx.lineTo(-20, 22);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = "#5a3818";
+    ctx.fillRect(-32, -4, 14, 10);
+  } else if (kind === "hammer"){
+    ctx.fillStyle = "#5a3818";
+    ctx.fillRect(-3, 0, 6, 38);
+    ctx.fillStyle = "#454c52";
+    ctx.fillRect(-16, -8, 32, 14);
+  } else {
+    ctx.fillStyle = "#7a808a";
+    ctx.fillRect(-4, 0, 8, 32);
+    ctx.beginPath();
+    ctx.arc(0, 0, 11, 0, Math.PI*2);
+    ctx.arc(0, 32, 9, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFevicolPoster(x, y, w, h){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = "#f4e6c8";
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = "#8a4a10";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(0, 0, w, h);
+  ctx.fillStyle = "#a55a05";
+  ctx.font = "bold 20px Trebuchet MS";
+  ctx.textAlign = "center";
+  ctx.fillText("FEVICOL", w/2, 30);
+  ctx.fillStyle = "#231505";
+  ctx.font = "italic 12px Trebuchet MS";
+  ctx.fillText("ka jod", w/2, 50);
+  ctx.fillText("hai", w/2, 66);
+  // glue tube icon
+  ctx.fillStyle = "#e8951a";
+  ctx.fillRect(w/2 - 18, 72, 36, 12);
+  ctx.fillStyle = "#a55a05";
+  ctx.fillRect(w/2 - 4, 70, 8, 4);
+  ctx.restore();
+}
+
+function drawTile(t){
+  ctx.save();
+  ctx.translate(t.x, t.y);
+  if (t.kind === "wood"){
+    // wood plank
+    const grad = ctx.createLinearGradient(0, 0, 0, t.h);
+    grad.addColorStop(0, "#a06a32");
+    grad.addColorStop(0.5, "#7a4a22");
+    grad.addColorStop(1, "#5e3a1b");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, t.w, t.h);
+    // grain
+    ctx.strokeStyle = "rgba(40,20,5,0.25)";
+    ctx.lineWidth = 1;
+    for (let i = 8; i < t.h; i += 14){
+      ctx.beginPath();
+      ctx.moveTo(0, i);
+      for (let x = 0; x <= t.w; x += 12){
+        ctx.lineTo(x, i + Math.sin(x*0.04 + t.x*0.01)*1.4);
+      }
+      ctx.stroke();
+    }
+    // top highlight
+    ctx.fillStyle = "rgba(255,220,170,0.18)";
+    ctx.fillRect(0, 0, t.w, 3);
+    // bottom shadow
+    ctx.fillStyle = "rgba(0,0,0,0.3)";
+    ctx.fillRect(0, t.h - 4, t.w, 4);
+  } else if (t.kind === "oil"){
+    // slippery green panel
+    const grad = ctx.createLinearGradient(0, 0, 0, t.h);
+    grad.addColorStop(0, "#3a6b3a");
+    grad.addColorStop(0.4, "#2d4f2d");
+    grad.addColorStop(1, "#1c321c");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, t.w, t.h);
+    // sheen
+    ctx.fillStyle = "rgba(120,200,120,0.35)";
+    for (let i = 0; i < t.w; i += 30){
+      ctx.beginPath();
+      ctx.ellipse(i + 10, 6, 8, 2, 0, 0, Math.PI*2);
+      ctx.fill();
+    }
+    // hatching to signal "no stick"
+    ctx.strokeStyle = "rgba(0,0,0,0.35)";
+    ctx.lineWidth = 1;
+    for (let i = -t.h; i < t.w; i += 8){
+      ctx.beginPath();
+      ctx.moveTo(i, t.h);
+      ctx.lineTo(i + t.h, 0);
+      ctx.stroke();
+    }
+    // OIL label
+    if (t.w > 80){
+      ctx.fillStyle = "rgba(255,255,255,0.7)";
+      ctx.font = "bold 11px Trebuchet MS";
+      ctx.textAlign = "center";
+      ctx.fillText("OIL — NO STICK", t.w/2, t.h/2 + 4);
+    }
+  } else if (t.kind === "sticky"){
+    // glue pad
+    const grad = ctx.createLinearGradient(0, 0, 0, t.h);
+    grad.addColorStop(0, "#fad658");
+    grad.addColorStop(1, "#c87b08");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, t.w, t.h);
+    // drips
+    ctx.fillStyle = "#c87b08";
+    for (let i = 6; i < t.w; i += 18){
+      ctx.beginPath();
+      ctx.ellipse(i, t.h - 1, 4, 7, 0, 0, Math.PI);
+      ctx.fill();
+    }
+    ctx.fillStyle = "rgba(255,255,255,0.45)";
+    ctx.fillRect(2, 1, t.w - 4, 2);
+  }
+  ctx.restore();
+}
+
+function drawSaw(x, y, r, ang){
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(ang);
+  // teeth
+  ctx.fillStyle = "#cfd5dc";
+  ctx.beginPath();
+  const teeth = 14;
+  for (let i = 0; i < teeth; i++){
+    const a1 = (i / teeth) * Math.PI * 2;
+    const a2 = ((i + 0.5) / teeth) * Math.PI * 2;
+    const a3 = ((i + 1) / teeth) * Math.PI * 2;
+    ctx.lineTo(Math.cos(a1) * r, Math.sin(a1) * r);
+    ctx.lineTo(Math.cos(a2) * (r + 8), Math.sin(a2) * (r + 8));
+    ctx.lineTo(Math.cos(a3) * r, Math.sin(a3) * r);
+  }
+  ctx.closePath();
+  ctx.fill();
+  // disc
+  ctx.fillStyle = "#9aa3ad";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.85, 0, Math.PI*2);
+  ctx.fill();
+  // hub
+  ctx.fillStyle = "#3a3f44";
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.18, 0, Math.PI*2);
+  ctx.fill();
+  // motion lines
+  ctx.strokeStyle = "rgba(40,40,40,0.5)";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 0.55, 0, Math.PI * 0.7);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawExit(ex){
+  // giant Fevicol tube
+  ctx.save();
+  ctx.translate(ex.x, ex.y);
+  // body
+  const w = ex.w, h = ex.h;
+  const grad = ctx.createLinearGradient(0, 0, w, 0);
+  grad.addColorStop(0, "#c87b08");
+  grad.addColorStop(0.5, "#fad658");
+  grad.addColorStop(1, "#a55a05");
+  ctx.fillStyle = grad;
+  ctx.fillRect(6, 18, w - 12, h - 24);
+  // cap (top)
+  ctx.fillStyle = "#5a2f02";
+  ctx.fillRect(w/2 - 12, 0, 24, 22);
+  ctx.fillRect(w/2 - 16, 6, 32, 6);
+  // base
+  ctx.fillStyle = "#8b3f04";
+  ctx.fillRect(0, h - 10, w, 10);
+  // label
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(8, 36, w - 16, h - 60);
+  ctx.fillStyle = "#a55a05";
+  ctx.font = "bold 14px Trebuchet MS";
+  ctx.textAlign = "center";
+  ctx.fillText("FEVICOL", w/2, 56);
+  ctx.fillStyle = "#231505";
+  ctx.font = "italic 9px Trebuchet MS";
+  ctx.fillText("FOREVER", w/2, 70);
+  // glow
+  ctx.shadowColor = "#fad658";
+  ctx.shadowBlur = 30;
+  ctx.strokeStyle = "rgba(255,225,140,0.6)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(6, 18, w - 12, h - 24);
+  ctx.restore();
+}
+
+function drawBond(a, b){
+  // Fevicol-amber elastic line with droplets
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const d = Math.hypot(dx, dy);
+  const stretch = Math.max(0, d - BOND_REST) / (BOND_LEN - BOND_REST);
+  const sag = (1 - stretch) * 24;
+  const midX = (a.x + b.x) / 2;
+  const midY = (a.y + b.y) / 2 + sag;
+
+  ctx.save();
+  ctx.lineCap = "round";
+  // outer glow
+  ctx.strokeStyle = "rgba(247,201,72,0.35)";
+  ctx.lineWidth = 9;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+  ctx.stroke();
+  // core
+  ctx.strokeStyle = stretch > 0.7 ? "#e8951a" : "#f7c948";
+  ctx.lineWidth = 4 + (1 - stretch) * 2;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.quadraticCurveTo(midX, midY, b.x, b.y);
+  ctx.stroke();
+  // highlight
+  ctx.strokeStyle = "rgba(255,255,255,0.4)";
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y - 1);
+  ctx.quadraticCurveTo(midX, midY - 1, b.x, b.y - 1);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawBuddy(b, isActive){
+  ctx.save();
+  ctx.translate(b.x, b.y);
+
+  // shadow
+  ctx.fillStyle = "rgba(0,0,0,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(0, BUDDY_R + 4, BUDDY_R*0.9, 4, 0, 0, Math.PI*2);
+  ctx.fill();
+
+  // active glow
+  if (isActive){
+    ctx.shadowColor = "#fad658";
+    ctx.shadowBlur = 22;
+    ctx.strokeStyle = "rgba(247,201,72,0.95)";
+    ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.arc(0, -2, BUDDY_R + 4, 0, Math.PI*2);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  // body (vest)
+  ctx.fillStyle = b.color;
+  ctx.beginPath();
+  ctx.ellipse(0, 4, BUDDY_R*0.9, BUDDY_R*1.05, 0, 0, Math.PI*2);
+  ctx.fill();
+  // belt
+  ctx.fillStyle = "#3a230f";
+  ctx.fillRect(-BUDDY_R*0.85, 8, BUDDY_R*1.7, 4);
+  // buckle
+  ctx.fillStyle = "#f7c948";
+  ctx.fillRect(-3, 8, 6, 4);
+
+  // head
+  ctx.fillStyle = "#e7b889";
+  ctx.beginPath();
+  ctx.arc(0, -8, BUDDY_R*0.78, 0, Math.PI*2);
+  ctx.fill();
+
+  // hat (carpenter cap)
+  ctx.fillStyle = b.hatColor;
+  ctx.beginPath();
+  ctx.ellipse(0, -16, BUDDY_R*0.85, 7, 0, 0, Math.PI*2);
+  ctx.fill();
+  ctx.fillRect(-BUDDY_R*0.85, -16, BUDDY_R*1.7, 4);
+  // hat brim
+  ctx.fillStyle = "#1c100600";
+  ctx.fillStyle = "rgba(0,0,0,0.3)";
+  ctx.fillRect(-BUDDY_R*0.85, -13, BUDDY_R*1.7, 2);
+
+  // moustache
+  ctx.fillStyle = "#3a230f";
+  ctx.fillRect(-5, -4, 10, 2);
+  ctx.fillRect(-7, -4, 2, 4);
+  ctx.fillRect(5, -4, 2, 4);
+
+  // eyes
+  const blink = b.blink < 0;
+  const eyeY = -10;
+  const eyeOff = b.lookDir * 1.2;
+  ctx.fillStyle = "#fff";
+  if (!blink){
+    ctx.beginPath(); ctx.arc(-4, eyeY, 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 4, eyeY, 2.4, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = "#231505";
+    ctx.beginPath(); ctx.arc(-4 + eyeOff, eyeY, 1.2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc( 4 + eyeOff, eyeY, 1.2, 0, Math.PI*2); ctx.fill();
+  } else {
+    ctx.fillStyle = "#231505";
+    ctx.fillRect(-6, eyeY - 0.5, 4, 1.5);
+    ctx.fillRect( 2, eyeY - 0.5, 4, 1.5);
+  }
+
+  // stuck indicator — glue blob beneath
+  if (b.stuck){
+    ctx.fillStyle = "#f7c948";
+    ctx.beginPath();
+    ctx.arc(0, BUDDY_R + 1, 5, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = "#e8951a";
+    ctx.beginPath();
+    ctx.arc(0, BUDDY_R + 3, 3, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawParticles(){
+  for (const p of particles){
+    const a = Math.max(0, Math.min(1, p.life / p.max));
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = a;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ===========================================================
+// HUD / OVERLAYS
+// ===========================================================
+const $ = (id) => document.getElementById(id);
+
+function updateHUD(){
+  $("pill-level").textContent = `Level ${levelIdx+1} — ${LEVELS[levelIdx].title}`;
+  $("pill-attempts").textContent = `Tries: ${attempts}`;
+  const pm = $("pill-mistry"), pc = $("pill-chela");
+  pm.classList.toggle("active", activeId === 0);
+  pc.classList.toggle("active", activeId === 1);
+  pm.classList.toggle("stuck",   buddies[0].stuck);
+  pm.classList.toggle("unstuck", !buddies[0].stuck);
+  pc.classList.toggle("stuck",   buddies[1].stuck);
+  pc.classList.toggle("unstuck", !buddies[1].stuck);
+}
+
+function showOverlay(id){
+  document.querySelectorAll(".overlay").forEach(o => o.classList.remove("show"));
+  if (id) $(id).classList.add("show");
+}
+
+function showHint(text, ms = 4500){
+  const el = $("hint");
+  el.innerHTML = text;
+  el.classList.add("show");
+  clearTimeout(showHint._t);
+  showHint._t = setTimeout(() => el.classList.remove("show"), ms);
+}
+
+function showToast(text, ms = 1100){
+  const el = $("toast");
+  el.textContent = text;
+  el.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove("show"), ms);
+}
+
+// ===========================================================
+// FLOW
+// ===========================================================
+function startGame(){
+  levelIdx = 0;
+  totalAttempts = 0;
+  levelTimes = [];
+  showLevelIntro();
+}
+
+function showLevelIntro(){
+  const lv = LEVELS[levelIdx];
+  $("intro-tag").textContent = `Level ${levelIdx+1} of ${LEVELS.length}`;
+  $("intro-title").textContent = lv.title;
+  $("intro-desc").textContent  = lv.desc;
+  $("intro-tip").innerHTML = lv.tip ? `Tip: ${lv.tip}` : "";
+  state = "intro";
+  showOverlay("overlay-intro");
+}
+
+function startLevel(){
+  loadLevel(levelIdx);
+  $("hud").style.display = "flex";
+  state = "playing";
+  showOverlay(null);
+  // first-level inline hint
+  if (levelIdx === 0){
+    showHint(`<kbd>1</kbd>/<kbd>2</kbd> switch buddy &nbsp;·&nbsp; <kbd>SPACE</kbd> stick / unstick &nbsp;·&nbsp; <kbd>A</kbd><kbd>D</kbd> walk &nbsp;·&nbsp; <kbd>W</kbd> jump &nbsp;·&nbsp; <kbd>R</kbd> retry`, 7000);
+  }
+}
+
+function onLevelWin(time){
+  state = "level_win";
+  $("win-title").textContent = randomPraise();
+  $("win-stats").innerHTML = `<strong>${LEVELS[levelIdx].title}</strong> cleared in <strong>${time.toFixed(1)}s</strong> — ${attempts} retries.`;
+  $("hud").style.display = "none";
+  showOverlay("overlay-win-level");
+}
+
+function nextLevel(){
+  levelIdx++;
+  if (levelIdx >= LEVELS.length){
+    state = "game_win";
+    const total = levelTimes.reduce((a,b) => a+b, 0);
+    $("final-stats").innerHTML = `Total time: <strong>${total.toFixed(1)}s</strong>. Total retries: <strong>${totalAttempts}</strong>.`;
+    showOverlay("overlay-win-game");
+    return;
+  }
+  showLevelIntro();
+}
+
+function randomPraise(){
+  const o = ["Bonded!","Yeh dosti!","Unbreakable!","Fevicol-fast!","Mistry & Chela!","Solid jod!"];
+  return o[Math.floor(Math.random()*o.length)];
+}
+
+// Buttons
+$("btn-start").addEventListener("click", startGame);
+$("btn-intro").addEventListener("click", startLevel);
+$("btn-next").addEventListener("click", nextLevel);
+$("btn-replay").addEventListener("click", () => { startGame(); });
+
+// Begin loop
+requestAnimationFrame(step);
+</script>
+</body>
+</html>
