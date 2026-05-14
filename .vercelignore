@@ -13,7 +13,6 @@ sprites_raw/
 # Other prototype HTML in the working tree, none used by GOAT vs OG
 gemini-cli/
 posters/
-redbull-rush.html
 redbull-astro-wings.html
 rapido_rush.html
 
@@ -28,3 +27,6 @@ sprite_mapping.md
 # OS / editor
 .DS_Store
 .vscode/
+
+# Bowl It Green is a separate Vercel project — never ship from Goat vs OG
+bowl-it-green/
