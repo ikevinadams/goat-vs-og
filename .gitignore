@@ -1,0 +1,32 @@
+# Cleaning pipeline leftovers — not needed at runtime
+sprites/originals-with-bg/
+sprites/redbull-rush-archive/
+sprites/hf_*.png
+sprites/hf_*.mp4
+sprites/home_cover_alt.png
+sprites/home_cover_full.mp4
+sprites/.DS_Store
+
+# Raw greenscreen uploads (~200MB) — never commit these.
+sprites_raw/
+
+# Other prototype HTML in the working tree, none used by GOAT vs OG
+gemini-cli/
+posters/
+redbull-astro-wings.html
+rapido_rush.html
+
+# Don't commit the takedown notice backup
+index.html.takedown.bak
+
+# Dev notes
+jana-nayagan-art-brief.md
+sprite_mapping.md
+
+# OS / editor
+.DS_Store
+.vscode/
+.git.jn-backup/
+
+# Bowl It Green lives as its own standalone Vercel project — exclude entirely from Goat vs OG
+bowl-it-green/

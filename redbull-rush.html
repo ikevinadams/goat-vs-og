@@ -1,0 +1,1880 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="theme-color" content="#0b2a4a" />
+<title>Red Bull Rush — Mobile</title>
+<style>
+  :root {
+    --sky-top: #0b2a4a;
+    --sky-bottom: #4aa3df;
+    --ground: #1f3a2b;
+    --grass: #3d8a4a;
+    --ui: #ffffff;
+    --accent: #ffcc00;
+    --danger: #ff3b3b;
+    --rb-red: #d72c2c;
+    --rb-blue: #1e3a8a;
+    --rb-silver: #d9dde3;
+  }
+  html, body {
+    margin: 0; padding: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    color: var(--ui);
+    user-select: none;
+  }
+  #wrap {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background:
+      radial-gradient(120% 80% at 50% 0%, var(--sky-top) 0%, var(--sky-bottom) 100%);
+  }
+  canvas {
+    display: block;
+    width: 100vw; height: 100vh;
+    image-rendering: pixelated;
+    cursor: pointer;
+  }
+  .overlay {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    pointer-events: none;
+  }
+  .panel {
+    pointer-events: auto;
+    background: rgba(10, 14, 22, 0.78);
+    border: 2px solid rgba(255,255,255,0.12);
+    border-radius: 18px;
+    padding: 28px 32px;
+    text-align: center;
+    max-width: 560px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+  }
+  .panel h1 {
+    margin: 0 0 6px; font-size: 34px; letter-spacing: 1px;
+    background: linear-gradient(90deg, #ffd84d, #ff7a00);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .panel h2 { margin: 0 0 10px; font-size: 26px; }
+  .panel p  { margin: 6px 0; line-height: 1.45; opacity: 0.9; }
+  .keycap {
+    display: inline-block;
+    padding: 2px 8px;
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+    margin: 0 2px;
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 13px;
+  }
+  .btn {
+    display: inline-block;
+    margin-top: 14px;
+    padding: 10px 22px;
+    border: 0; border-radius: 12px;
+    background: linear-gradient(180deg, #ffd84d, #f59e0b);
+    color: #1a1a1a; font-weight: 700; font-size: 16px;
+    cursor: pointer;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.35);
+  }
+  .btn:hover { filter: brightness(1.05); }
+  .btn:active { transform: translateY(1px); }
+  .hud-row { display:flex; gap: 14px; justify-content: center; margin-top: 8px; flex-wrap: wrap; }
+  .stat {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.12);
+    padding: 6px 12px; border-radius: 10px; font-size: 14px;
+  }
+  .hidden { display: none !important; }
+  .corner-note {
+    position: absolute; bottom: 10px; right: 14px;
+    font-size: 11px; opacity: 0.45; pointer-events: none;
+  }
+  .legend {
+    display:flex; gap: 14px; justify-content: center; flex-wrap: wrap;
+    margin-top: 10px; font-size: 12px; opacity: 0.85;
+  }
+  .legend span b { display:inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: middle; margin-right: 4px;}
+
+  /* ---------- Touch controls (visible only on touch / coarse pointers) ---------- */
+  #touch-ui {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    display: none;          /* shown only when JS detects touch + game is playing */
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;
+  }
+  #touch-ui.show { display: block; }
+  .tz {                                  /* base touch zone */
+    position: absolute;
+    pointer-events: auto;
+    touch-action: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Left half = move left.  Right half (excluding fly btn) = move right. */
+  .tz-left, .tz-right {
+    top: 0; bottom: 0; width: 50%;
+  }
+  .tz-left  { left: 0; }
+  .tz-right { right: 0; }
+  /* Visual hint when pressed */
+  .tz-left.active::before, .tz-right.active::before {
+    content: ''; position: absolute; inset: 0;
+    background: radial-gradient(circle at 50% 60%, rgba(255,255,255,0.10), transparent 60%);
+    pointer-events: none;
+  }
+  /* Fly button — sits on top of the right zone, bottom-right */
+  .tz-fly {
+    right: max(24px, env(safe-area-inset-right));
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 110px; height: 110px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,216,77,0.95), rgba(245,158,11,0.95) 70%, rgba(180,100,0,0.9));
+    border: 3px solid rgba(255,255,255,0.55);
+    box-shadow: 0 10px 24px rgba(0,0,0,0.45), inset 0 -6px 14px rgba(0,0,0,0.25);
+    display: flex; align-items: center; justify-content: center;
+    color: #1a1a1a; font-weight: 800; font-size: 14px; letter-spacing: 1px;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.4);
+  }
+  .tz-fly::after {
+    content: 'FLY'; position: absolute; bottom: 22%;
+  }
+  .tz-fly svg { width: 56px; height: 56px; opacity: 0.92; margin-top: -8px; }
+  .tz-fly.active {
+    transform: scale(0.94);
+    background: radial-gradient(circle at 35% 30%, rgba(255,236,150,1), rgba(255,180,40,1) 70%, rgba(200,120,10,1));
+  }
+  /* Optional small "down" button at bottom-left for dive-down */
+  .tz-down {
+    left: max(24px, env(safe-area-inset-left));
+    bottom: max(24px, env(safe-area-inset-bottom));
+    width: 78px; height: 78px;
+    border-radius: 50%;
+    background: rgba(20, 30, 50, 0.55);
+    border: 2px solid rgba(255,255,255,0.30);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 12px; letter-spacing: 1px;
+  }
+  .tz-down svg { width: 38px; height: 38px; opacity: 0.85; }
+  .tz-down.active { transform: scale(0.92); background: rgba(40, 60, 90, 0.7); }
+
+  /* ---------- Orientation warning (shown on portrait phones) ---------- */
+  #rotate-warn {
+    position: absolute; inset: 0;
+    background: rgba(8, 12, 22, 0.96);
+    color: #fff;
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 100;
+    text-align: center;
+    padding: 24px;
+  }
+  #rotate-warn.show { display: flex; }
+  #rotate-warn .rotate-card {
+    max-width: 380px;
+  }
+  #rotate-warn h2 { margin: 0 0 12px; font-size: 24px; }
+  #rotate-warn p  { margin: 0; opacity: 0.8; line-height: 1.5; }
+  #rotate-warn .phone-icon {
+    width: 80px; height: 130px;
+    border: 3px solid #fff; border-radius: 12px;
+    margin: 0 auto 20px;
+    position: relative;
+    animation: rotateHint 2.4s ease-in-out infinite;
+  }
+  #rotate-warn .phone-icon::before {
+    content: ''; position: absolute; top: 8px; left: 50%;
+    transform: translateX(-50%);
+    width: 30px; height: 4px; border-radius: 2px;
+    background: rgba(255,255,255,0.5);
+  }
+  @keyframes rotateHint {
+    0%, 30%   { transform: rotate(0deg); }
+    60%, 100% { transform: rotate(-90deg); }
+  }
+
+  /* ---------- Mobile-first responsive panels ---------- */
+  @media (max-width: 720px), (max-height: 500px) {
+    .panel {
+      max-width: 92vw;
+      padding: 20px 22px;
+      border-radius: 14px;
+    }
+    .panel h1 { font-size: 26px; }
+    .panel h2 { font-size: 20px; }
+    .panel p  { font-size: 14px; }
+    .btn      { padding: 14px 32px; font-size: 18px; min-height: 44px; }
+    .keycap   { font-size: 11px; padding: 1px 6px; }
+    .corner-note { display: none; }
+  }
+  /* Hide keyboard hints on touch devices */
+  @media (hover: none) and (pointer: coarse) {
+    .keyboard-hint { display: none !important; }
+  }
+  /* Hide touch hints on desktop */
+  @media (hover: hover) and (pointer: fine) {
+    .touch-hint { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div id="wrap">
+    <canvas id="game"></canvas>
+
+    <!-- Touch controls (shown on touch devices when playing) -->
+    <div id="touch-ui">
+      <div class="tz tz-left"  id="tzLeft"></div>
+      <div class="tz tz-right" id="tzRight"></div>
+      <div class="tz tz-down"  id="tzDown" aria-label="Dive">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>
+      </div>
+      <div class="tz tz-fly"   id="tzFly" aria-label="Fly / Jump">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+      </div>
+    </div>
+
+    <!-- Rotate-to-landscape prompt (mobile portrait only) -->
+    <div id="rotate-warn">
+      <div class="rotate-card">
+        <div class="phone-icon"></div>
+        <h2>Rotate your device</h2>
+        <p>Red Bull Rush plays best in landscape. Turn your phone sideways to start.</p>
+      </div>
+    </div>
+
+    <!-- Start screen -->
+    <div id="start" class="overlay">
+      <div class="panel">
+        <h1>RED BULL RUSH</h1>
+        <p>Run, fly, land on ledges, grab Red Bull cans for energy, dodge obstacles, reach the finish line.</p>
+        <p class="keyboard-hint">
+          <span class="keycap">A</span> <span class="keycap">D</span> &nbsp;or&nbsp;
+          <span class="keycap">←</span> <span class="keycap">→</span> &nbsp;— move left / right
+        </p>
+        <p class="keyboard-hint">
+          Hold <span class="keycap">Space</span> &nbsp;or&nbsp; <span class="keycap">W</span> / <span class="keycap">↑</span> &nbsp;— fly up<br/>
+          Tap <span class="keycap">Space</span> on a ledge — quick jump (free, no fuel) &nbsp;|&nbsp;
+          <span class="keycap">S</span> / <span class="keycap">↓</span> — dive down
+        </p>
+        <p class="touch-hint">
+          <b>Hold left side</b> to walk left, <b>hold right side</b> to walk right.<br/>
+          <b>Hold the FLY button</b> (bottom-right) to fly up — tap it on a ledge for a free jump.<br/>
+          The small ↓ button on the bottom-left lets you dive faster.
+        </p>
+        <div class="legend">
+          <span><b style="background:#ffd84d"></b>Star = points</span>
+          <span><b style="background:#1e3a8a"></b>Red Bull = energy</span>
+          <span><b style="background:#7a8995"></b>Ledge = land &amp; rest</span>
+          <span><b style="background:#ff3b3b"></b>Obstacle = avoid</span>
+        </div>
+        <p class="keyboard-hint" style="opacity:.7;font-size:13px;margin-top:14px"><span class="keycap">P</span> pause &nbsp; <span class="keycap">R</span> restart &nbsp; <span class="keycap">F</span> fullscreen</p>
+        <button id="startBtn" class="btn">PLAY</button>
+      </div>
+    </div>
+
+    <!-- Pause screen -->
+    <div id="pause" class="overlay hidden">
+      <div class="panel">
+        <h2>Paused</h2>
+        <p>Press <span class="keycap">P</span> to resume.</p>
+        <button id="resumeBtn" class="btn">RESUME</button>
+      </div>
+    </div>
+
+    <!-- Game over -->
+    <div id="gameover" class="overlay hidden">
+      <div class="panel">
+        <h2 id="goTitle">Out of energy!</h2>
+        <p id="goSub">You ran out of Red Bull. Land on ledges to save energy and grab cans more aggressively.</p>
+        <div class="hud-row">
+          <div class="stat">Stars: <b id="goStars">0</b></div>
+          <div class="stat">Distance: <b id="goDist">0m</b></div>
+          <div class="stat">Score: <b id="goScore">0</b></div>
+        </div>
+        <button id="retryBtn" class="btn">RETRY</button>
+      </div>
+    </div>
+
+    <!-- Win -->
+    <div id="win" class="overlay hidden">
+      <div class="panel">
+        <h2>Finish line!</h2>
+        <p>You completed the course.</p>
+        <div class="hud-row">
+          <div class="stat">Stars: <b id="winStars">0</b></div>
+          <div class="stat">Energy left: <b id="winFuel">0%</b></div>
+          <div class="stat">Score: <b id="winScore">0</b></div>
+        </div>
+        <button id="nextBtn" class="btn">PLAY AGAIN</button>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+/* ============================================================
+   RED BULL RUSH — prototype
+   v2: platforms/ledges, guaranteed fuel timing, richer obstacles
+
+   Controls:
+     - Hold SPACE / UP / W / mouse / touch to thrust up while flying
+     - On a ledge, tap thrust to take off (one quick boost up)
+     - P pause, R restart, F fullscreen
+   ============================================================ */
+
+(() => {
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+
+  // ------------- DPR-aware sizing -------------
+  let W = 0, H = 0, DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+  function resize() {
+    DPR = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width  = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // ------------- Game constants -------------
+  const CFG = {
+    // physics
+    gravity: 1500,
+    thrust: -2400,
+    maxFallSpeed: 900,
+    maxRiseSpeed: -700,
+    drag: 0.998,
+    takeoffBoost: -520,        // initial vy when holding thrust to take off from a ledge
+    jumpImpulse: -560,         // smaller pop from a tap of space
+    downBoost: 1500,           // extra downward accel when S/Down is held in air
+
+    // horizontal movement (replacing old auto-scroll)
+    walkAccel: 1800,
+    walkMaxSpeed: 360,
+    walkDrag: 8,               // exponential drag per second when no horizontal input
+    cameraOffsetX: 0.30,       // player sits at this fraction of screen width
+    spawnAhead: 1.6,           // spawn frontier extends this many screen widths ahead of camera
+
+    // world
+    levelDistance: 4000,        // meters — player traverses this far to win
+    pixelsPerMeter: 12,
+
+    // fuel
+    fuelMax: 100,
+    fuelDrainPerSec: 6,        // baseline (only while flying)
+    fuelDrainBoostPerSec: 4,   // extra while thrusting
+    fuelPerCan: 22,
+    maxTimeBetweenCans: 5.5,   // hard guarantee — see spawn loop
+
+    // independent spawn timers (seconds)
+    canEveryMin: 3.4,
+    canEveryMax: 5.0,
+    starEveryMin: 1.0,
+    starEveryMax: 2.2,
+    obstacleEveryMin: 1.6,
+    obstacleEveryMax: 3.0,
+    platformEveryMin: 4.0,
+    platformEveryMax: 7.5,
+
+    // entities
+    playerRadius: 18,
+    starRadius: 12,
+    canSize: { w: 26, h: 50 },
+    rockSize: { w: 60, h: 44 },
+    droneSize: { w: 56, h: 30 },
+    sawRadius: 36,
+    gateWidth: 56,
+    gateGapMin: 200,
+    gateGapMax: 280,
+    platformH: 16,
+    platformMinW: 150,
+    platformMaxW: 280,
+    platformMinY: 0.32,        // as fraction of H
+    platformMaxY: 0.72,
+    // jet — moving obstacle
+    jetW: 130, jetH: 60,
+    jetSpeed: 720,             // px/s, moves leftward
+    jetSpawnEveryMin: 7.0,
+    jetSpawnEveryMax: 13.0,
+
+    // scoring
+    starScore: 10,
+    fuelLeftScore: 5,
+    distanceScore: 0.05,
+
+    // sprites — isolated subfolder so this game's assets don't collide with
+    // the other prototypes that also live in /sprites/ (the shooter project).
+    spritePath: 'sprites/redbull-rush/',
+    heroTargetSize: 130,         // largest dimension target for hero sprites
+    canSpriteHeight: 50,         // can sprite display height
+  };
+
+  // Per-pose multipliers so the hero looks the same physical size in every pose.
+  // 1.0 = use heroTargetSize as the longest dimension; <1 shrinks, >1 grows.
+  const HERO_SCALE = {
+    thrust: 1.00,
+    glide:  1.00,
+    dive:   0.85,    // arms+leg fully extended make the bbox huge — compensate
+    idle:   1.00,
+    run:    0.95,
+    win:    0.95,
+  };
+
+  // ------------- Sprite loader (chroma-keyed) -------------
+  // Each generated image is on a #00FF00 background with a small Gemini sparkle
+  // watermark in the bottom-right corner. We:
+  //   1) paint over the corner watermark area with green (so it gets keyed out)
+  //   2) knock out pure green pixels (alpha = 0)
+  //   3) despill: where green is the dominant channel on edge pixels, pull it
+  //      down to max(r, b) so wings and skin don't have a green halo.
+  function chromaKey(img) {
+    const c = document.createElement('canvas');
+    c.width  = img.naturalWidth;
+    c.height = img.naturalHeight;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0);
+
+    // scrub watermark — small box, bottom-right
+    const wm = Math.max(80, Math.floor(Math.min(c.width, c.height) * 0.07));
+    x.fillStyle = '#00ff00';
+    x.fillRect(c.width - wm, c.height - wm, wm, wm);
+
+    const data = x.getImageData(0, 0, c.width, c.height);
+    const d = data.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const r = d[i], g = d[i+1], b = d[i+2];
+      const greenDominant = (g - r > 30) && (g - b > 30) && g > 90;
+      if (greenDominant) {
+        d[i+3] = 0;
+      } else if (g > r && g > b && (g - Math.max(r, b)) > 12) {
+        // edge despill
+        d[i+1] = Math.max(r, b);
+      }
+    }
+    x.putImageData(data, 0, 0);
+    return c;
+  }
+
+  // All saved sprites face RIGHT canonically (the run pose was pre-flipped at
+  // preprocess time). To draw the hero facing left, set player.facing = -1.
+  const HERO_FILES = {
+    thrust: 'hero_thrust.png',  // active flight, scarf streaming
+    glide:  'hero_glide.png',   // calm horizontal flight
+    dive:   'hero_dive.png',    // diving / wipeout
+    idle:   'hero_idle.png',    // standing on ledge
+    run:    'hero_run.png',     // running on ledge
+    win:    'hero_win.png',     // victory celebration
+  };
+  // Pickup sprites that go through the same loader.
+  const PICKUP_FILES = {
+    can:  'redbull_can.png',
+    star: 'star.png',
+  };
+  // World/obstacle sprites
+  const WORLD_FILES = {
+    sun:         'sun.png',
+    cloud_a:     'cloud_a.png',
+    mountains_a: 'm1.png',
+    mountains_b: 'm2.png',
+    ground:      'ground_strip.png',
+    ledge:       'ledge.png',
+    rock:        'rock.png',
+    birds:       'birds_flock.png',
+    windmill:    'windmill.png',
+    storm:       'storm_cloud.png',
+    jet:         'jet.png',
+  };
+
+  const sprites = {};               // key -> Image or Canvas with alpha
+  function loadSprite(key, file, useChromaKey) {
+    const img = new Image();
+    img.onload = () => {
+      if (useChromaKey) {
+        try { sprites[key] = chromaKey(img); }
+        catch (e) {
+          // file:// canvas tainting is expected; PNGs are pre-cleaned anyway
+          sprites[key] = img;
+        }
+      } else {
+        sprites[key] = img;       // can already has its own alpha; use as-is
+      }
+    };
+    img.onerror = () => { console.warn('sprite not found:', CFG.spritePath + file); };
+    img.src = CFG.spritePath + file;
+  }
+  function loadSprites() {
+    for (const [k, f] of Object.entries(HERO_FILES))   loadSprite(k, f, true);
+    for (const [k, f] of Object.entries(PICKUP_FILES)) loadSprite(k, f, false);
+    for (const [k, f] of Object.entries(WORLD_FILES))  loadSprite(k, f, false);
+  }
+  loadSprites();
+  // tiny helper — draws an image at (cx, cy) scaled so its longest side hits `size` px
+  function drawSprite(sprite, cx, cy, size, opts) {
+    if (!sprite) return false;
+    const sw = sprite.naturalWidth  || sprite.width;
+    const sh = sprite.naturalHeight || sprite.height;
+    const longest = Math.max(sw, sh);
+    const scale = size / longest;
+    const w = sw * scale, h = sh * scale;
+    const ax = (opts && opts.anchorX) || 'center';   // 'center' | 'left' | 'right'
+    const ay = (opts && opts.anchorY) || 'center';   // 'center' | 'top' | 'bottom'
+    const dx = ax === 'left'   ? cx
+             : ax === 'right'  ? cx - w
+             : cx - w / 2;
+    const dy = ay === 'top'    ? cy
+             : ay === 'bottom' ? cy - h
+             : cy - h / 2;
+    ctx.drawImage(sprite, dx, dy, w, h);
+    return true;
+  }
+
+  // ------------- Input -------------
+  const input = {
+    left: false, right: false, up: false, down: false,
+    thrust: false,           // hold space (or W / Up) — sustained upward fly
+    jumpTap: false,          // edge-triggered: tap space => quick jump on a ledge
+    _spaceHeld: false,       // for edge detection
+  };
+  window.addEventListener('keydown', (e) => {
+    switch (e.code) {
+      case 'KeyA': case 'ArrowLeft':  input.left  = true; e.preventDefault(); break;
+      case 'KeyD': case 'ArrowRight': input.right = true; e.preventDefault(); break;
+      case 'KeyW': case 'ArrowUp':    input.up    = true; input.thrust = true; e.preventDefault(); break;
+      case 'KeyS': case 'ArrowDown':  input.down  = true; e.preventDefault(); break;
+      case 'Space':
+        if (!input._spaceHeld) input.jumpTap = true;
+        input._spaceHeld = true;
+        input.thrust = true;
+        if (state.phase === 'menu') startRun();
+        e.preventDefault();
+        break;
+      case 'KeyP': togglePause(); break;
+      case 'KeyR': startRun(); break;
+      case 'KeyF': toggleFullscreen(); break;
+    }
+  });
+  window.addEventListener('keyup', (e) => {
+    switch (e.code) {
+      case 'KeyA': case 'ArrowLeft':  input.left  = false; e.preventDefault(); break;
+      case 'KeyD': case 'ArrowRight': input.right = false; e.preventDefault(); break;
+      case 'KeyW': case 'ArrowUp':    input.up    = false; if (!input._spaceHeld) input.thrust = false; e.preventDefault(); break;
+      case 'KeyS': case 'ArrowDown':  input.down  = false; e.preventDefault(); break;
+      case 'Space':
+        input._spaceHeld = false;
+        if (!input.up) input.thrust = false;
+        e.preventDefault();
+        break;
+    }
+  });
+  // Desktop click/tap on the canvas — same intent as the FLY button
+  const press = (e) => {
+    if (state.phase === 'menu') startRun();
+    if (!input._spaceHeld) input.jumpTap = true;
+    input._spaceHeld = true;
+    input.thrust = true;
+    e.preventDefault?.();
+  };
+  const release = (e) => {
+    input._spaceHeld = false;
+    if (!input.up) input.thrust = false;
+    e.preventDefault?.();
+  };
+  canvas.addEventListener('mousedown', press);
+  window.addEventListener('mouseup', release);
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+  // ===================== Touch / mobile input =====================
+  // Each zone tracks its own pointer ID so multi-touch (move + fly + dive) works simultaneously.
+  const isTouchDevice = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+  const touchZones = {};
+  function bindZone(el, opts) {
+    if (!el) return;
+    let activePointerId = null;
+    const start = (ev) => {
+      if (activePointerId !== null) return;
+      activePointerId = ev.pointerId ?? -1;
+      el.classList.add('active');
+      opts.onPress?.(ev);
+      ev.preventDefault?.();
+    };
+    const end = (ev) => {
+      const pid = ev.pointerId ?? -1;
+      if (activePointerId !== null && pid !== activePointerId && pid !== -1) return;
+      activePointerId = null;
+      el.classList.remove('active');
+      opts.onRelease?.(ev);
+      ev.preventDefault?.();
+    };
+    // Use pointer events when available (handles touch + stylus + mouse uniformly)
+    el.addEventListener('pointerdown',   start, { passive: false });
+    el.addEventListener('pointerup',     end,   { passive: false });
+    el.addEventListener('pointercancel', end,   { passive: false });
+    el.addEventListener('pointerleave',  end,   { passive: false });
+    // Block native gestures
+    el.addEventListener('touchstart', e => e.preventDefault(), { passive: false });
+    el.addEventListener('contextmenu', e => e.preventDefault());
+    return { release: () => end({ pointerId: activePointerId }) };
+  }
+
+  touchZones.left = bindZone(document.getElementById('tzLeft'), {
+    onPress:   () => { input.left  = true;  if (state.phase === 'menu') startRun(); },
+    onRelease: () => { input.left  = false; },
+  });
+  touchZones.right = bindZone(document.getElementById('tzRight'), {
+    onPress:   () => { input.right = true;  if (state.phase === 'menu') startRun(); },
+    onRelease: () => { input.right = false; },
+  });
+  touchZones.down = bindZone(document.getElementById('tzDown'), {
+    onPress:   () => { input.down  = true; },
+    onRelease: () => { input.down  = false; },
+  });
+  // FLY button — tap = jump (when on ledge); hold = continuous thrust
+  touchZones.fly = bindZone(document.getElementById('tzFly'), {
+    onPress: () => {
+      if (state.phase === 'menu') startRun();
+      if (!input._spaceHeld) input.jumpTap = true;
+      input._spaceHeld = true;
+      input.thrust = true;
+    },
+    onRelease: () => {
+      input._spaceHeld = false;
+      if (!input.up) input.thrust = false;
+    },
+  });
+
+  // ===================== Orientation handling =====================
+  function isPortraitMobile() {
+    if (!isTouchDevice) return false;
+    return window.matchMedia('(orientation: portrait)').matches;
+  }
+  function updateOrientation() {
+    const warn = document.getElementById('rotate-warn');
+    const ui   = document.getElementById('touch-ui');
+    if (isPortraitMobile()) {
+      warn.classList.add('show');
+      ui.classList.remove('show');
+      // Pause the game if it was playing
+      if (state.phase === 'playing') { state.phase = 'paused'; show('pause'); }
+      // Release any held inputs so the player isn't stuck moving
+      input.left = input.right = input.up = input.down = input.thrust = false;
+      input._spaceHeld = false;
+    } else {
+      warn.classList.remove('show');
+      if (isTouchDevice) ui.classList.add('show');
+    }
+  }
+  window.addEventListener('orientationchange', () => setTimeout(updateOrientation, 80));
+  window.addEventListener('resize', updateOrientation);
+  // Initial check after page boots
+  setTimeout(updateOrientation, 50);
+
+  // Block iOS double-tap-zoom and pinch-zoom over the game
+  document.addEventListener('gesturestart',  e => e.preventDefault());
+  document.addEventListener('gesturechange', e => e.preventDefault());
+  document.addEventListener('dblclick',      e => e.preventDefault(), { passive: false });
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  }
+
+  // ------------- State -------------
+  const state = {
+    phase: 'menu',
+    t: 0,
+    cameraX: 0,
+    lastCameraX: 0,
+    distance: 0,
+    maxX: 0,                                // furthest x player has reached, for distance metric
+    stars: 0,
+    score: 0,
+    fuel: CFG.fuelMax,
+    cause: '',
+    shake: 0,
+    flash: 0,
+    spawnFrontiers: { star: 0, can: 0, obstacle: 0, platform: 0 },
+    jetTimer: 0,
+  };
+  let player, entities, particles, clouds, mountainLayers;
+
+  // ------------- Helpers -------------
+  const rand  = (a,b) => a + Math.random()*(b-a);
+  const irand = (a,b) => Math.floor(rand(a,b+1));
+  const clamp = (v,lo,hi) => Math.max(lo, Math.min(hi, v));
+  const groundY  = () => H - 70;
+  const ceilingY = () => 30;
+
+  function makePlayer() {
+    return {
+      x: W * CFG.cameraOffsetX,        // start so camera can sit at 0
+      y: H * 0.55,
+      vx: 0, vy: 0,
+      r: CFG.playerRadius,
+      tilt: 0,
+      animT: 0,
+      facing: 1,                       // 1 = right, -1 = left (sprites flip at draw time)
+      onPlatform: null,
+      alive: true,
+    };
+  }
+
+  function makeClouds() {
+    const arr = [];
+    // High clouds — drift across upper sky
+    for (let i = 0; i < 8; i++) {
+      arr.push({
+        x: rand(-100, W * 1.5),
+        y: rand(40, H * 0.35),
+        s: rand(0.75, 1.25),
+        speed: rand(0.6, 1.2),
+        sprite: 'cloud_a',
+      });
+    }
+    // Low clouds — sit just above the mountain tops, filling the mid-low band
+    for (let i = 0; i < 6; i++) {
+      arr.push({
+        x: rand(-100, W * 1.5),
+        y: rand(H * 0.45, H * 0.65),
+        s: rand(0.55, 0.95),
+        speed: rand(0.4, 0.8),
+        sprite: 'cloud_a',
+      });
+    }
+    return arr;
+  }
+  // Four depth layers — extra-far/far/mid/near — each with their own parallax,
+  // scale, alpha, vertical position, and atmospheric tint. Drawn back-to-front
+  // so the near layer overlaps everything else for cinematic depth.
+  // gap < 1 means each mountain instance overlaps the previous; smaller = denser.
+  // Mountain depth layers, drawn back-to-front. Each layer tiles the two
+  // mountain sprites (a/b alternating) edge-to-edge across the screen, scrolled
+  // by its own parallax factor — so the range reads as genuinely never-ending.
+  // displayH and yOffset are fractions of the screen height H.
+  // The mountain sprites are pre-cropped to peaks + clean upper body. Each layer
+  // tiles them edge-to-edge and anchors the clean bottom edge at the screen
+  // bottom (yOffset 0). displayH is the layer's on-screen height as a fraction of H.
+  const MOUNTAIN_LAYER_DEFS = [
+    {                          // FAR — distant band, smallest, hazy
+      name: 'far',
+      parallax: 0.14,
+      displayH: 0.34,
+      yOffset:  0.0,
+      alpha:    0.62,
+    },
+    {                          // MID
+      name: 'mid',
+      parallax: 0.28,
+      displayH: 0.46,
+      yOffset:  0.0,
+      alpha:    0.86,
+    },
+    {                          // NEAR — full colour foreground, tallest
+      name: 'near',
+      parallax: 0.46,
+      displayH: 0.60,
+      yOffset:  0.0,
+      alpha:    1.0,
+    },
+  ];
+
+  // No per-run instances any more — the layers tile statelessly from cameraX.
+  function makeMountainLayers() {
+    return MOUNTAIN_LAYER_DEFS;
+  }
+
+  function startRun() {
+    player = makePlayer();
+    entities = [];
+    particles = [];
+    clouds = makeClouds();
+    mountainLayers = makeMountainLayers();
+    state.t = 0;
+    state.cameraX = 0;
+    state.lastCameraX = 0;
+    state.distance = 0;
+    state.maxX = player.x;
+    state.stars = 0;
+    state.score = 0;
+    state.fuel = CFG.fuelMax;
+    state.cause = '';
+    state.shake = 0;
+    state.flash = 0;
+    state.jetTimer = rand(CFG.jetSpawnEveryMin, CFG.jetSpawnEveryMax);
+    // Seed the spawn frontiers so the first screen has content but a brief safe zone in front of the player.
+    state.spawnFrontiers.star     = player.x + W * 0.55;
+    state.spawnFrontiers.can      = player.x + W * 0.85;
+    state.spawnFrontiers.obstacle = player.x + W * 1.20;
+    state.spawnFrontiers.platform = player.x + W * 0.65;
+    input.thrust = false;
+    input._spaceHeld = false;
+    input.jumpTap = false;
+    state.phase = 'playing';
+    hideAllPanels();
+    if (isTouchDevice && !isPortraitMobile()) {
+      document.getElementById('touch-ui').classList.add('show');
+    }
+  }
+
+  function togglePause() {
+    if (state.phase === 'playing') {
+      state.phase = 'paused'; show('pause');
+      document.getElementById('touch-ui').classList.remove('show');
+      input.left = input.right = input.down = input.thrust = false; input._spaceHeld = false;
+    } else if (state.phase === 'paused') {
+      state.phase = 'playing'; hide('pause');
+      if (isTouchDevice && !isPortraitMobile()) document.getElementById('touch-ui').classList.add('show');
+    }
+  }
+
+  // ------------- Spawning (frontier-based, world coordinates) -------------
+  // All x coords here are WORLD x (not screen x). Frontiers in state advance
+  // forward as the camera moves right; they pause when the player stays put.
+  function spawnStar(x, y) {
+    entities.push({ type:'star', x, y, r: CFG.starRadius, alive: true, t: Math.random()*Math.PI*2 });
+  }
+  // Vary cluster shapes so stars feel naturally placed instead of always lined up.
+  function spawnStarClusterAt(worldX) {
+    const baseY = rand(H * 0.20, H * 0.72);
+    const pattern = Math.random();
+    if (pattern < 0.25) {
+      // gentle arc (the original) but with more spread
+      const n = irand(3, 4);
+      const dir = Math.random() < 0.5 ? -1 : 1;
+      const spacing = rand(110, 150);
+      const ampl = rand(70, 110);
+      for (let i = 0; i < n; i++) {
+        spawnStar(worldX + i * spacing, baseY + Math.sin(i * 0.5) * ampl * dir);
+      }
+    } else if (pattern < 0.5) {
+      // diagonal climb / dive
+      const n = irand(3, 4);
+      const slope = rand(-45, 45);
+      const spacing = rand(120, 160);
+      for (let i = 0; i < n; i++) {
+        spawnStar(worldX + i * spacing, baseY + i * slope + rand(-16, 16));
+      }
+    } else if (pattern < 0.75) {
+      // vertical column to encourage flying up/down
+      const n = irand(2, 3);
+      const spacing = rand(90, 120);
+      const drift = rand(-40, 40);
+      for (let i = 0; i < n; i++) {
+        spawnStar(worldX + i * drift, baseY - i * spacing);
+      }
+    } else {
+      // scattered cloud — random positions inside a bounded box
+      const n = irand(3, 4);
+      const boxW = rand(340, 480);
+      const boxH = rand(200, 280);
+      for (let i = 0; i < n; i++) {
+        spawnStar(worldX + rand(0, boxW), baseY + rand(-boxH/2, boxH/2));
+      }
+    }
+  }
+  function spawnCan(x, y) {
+    entities.push({ type:'can', x, y, w: CFG.canSize.w, h: CFG.canSize.h, alive: true, bob: Math.random()*Math.PI*2 });
+  }
+  function spawnRock(x, y) {
+    entities.push({ type:'rock', x, y, w: CFG.rockSize.w, h: CFG.rockSize.h, alive:true,
+      spin: rand(-1.2, 1.2), rot: 0, drift: rand(-30, 30) });
+  }
+  function spawnDrone(x, y) {
+    // Birds now actually fly — they cruise leftward (toward the player) at a moderate speed
+    // with a gentle vertical bob. Sprite is flipped at draw time to face left.
+    entities.push({
+      type: 'drone', x, y,
+      w: CFG.droneSize.w, h: CFG.droneSize.h, alive: true,
+      bob: Math.random() * Math.PI * 2,
+      hoverY: y,
+      ampl: rand(14, 28),     // smaller bob — they're cruising, not hovering
+      freq: rand(2.2, 3.4),
+      vx: -rand(180, 260),    // leftward cruise
+      facing: -1,             // sprite source faces right; we flip
+    });
+  }
+  function spawnSaw(x, y) {
+    entities.push({ type:'saw', x, y, r: CFG.sawRadius, rot: 0, spin: rand(5, 9) * (Math.random()<0.5?-1:1), alive:true,
+      hoverY: y, bob: Math.random()*Math.PI*2, ampl: rand(0, 50), freq: rand(0.6, 1.4),
+    });
+  }
+  function spawnGateAt(worldX) {
+    // Single hanging storm cloud from the top — player flies under it.
+    // Vertical extent picked so the cloud's lower edge sits well above ground level.
+    const dropH = rand(180, 280);
+    const w = CFG.gateWidth;
+    entities.push({
+      type: 'wall', x: worldX, y: ceilingY(), w, h: dropH,
+      alive: true, anchor: 'top',
+    });
+  }
+  function spawnPlatformAt(worldX) {
+    const w = rand(CFG.platformMinW, CFG.platformMaxW);
+    const y = rand(H * CFG.platformMinY, H * CFG.platformMaxY);
+    entities.push({ type:'platform', x: worldX, y, w, h: CFG.platformH, alive:true });
+  }
+  function spawnObstacleAt(worldX) {
+    const r = Math.random();
+    if (r < 0.30)      spawnRock (worldX, rand(H * 0.18, H * 0.78));
+    else if (r < 0.55) spawnDrone(worldX, rand(H * 0.20, H * 0.70));
+    else if (r < 0.80) spawnGateAt(worldX);
+    else               spawnSaw  (worldX, rand(H * 0.22, H * 0.72));
+    // sometimes pair a second obstacle slightly ahead
+    if (Math.random() < 0.20) {
+      const r2 = Math.random();
+      if (r2 < 0.5) spawnRock (worldX + 200, rand(H * 0.18, H * 0.78));
+      else          spawnDrone(worldX + 220, rand(H * 0.20, H * 0.70));
+    }
+  }
+
+  // Advance frontiers up to spawnAhead screens beyond the camera.
+  function runSpawnFrontier() {
+    const ahead = state.cameraX + W * CFG.spawnAhead;
+    const cap = CFG.levelDistance * CFG.pixelsPerMeter - 200;
+    while (state.spawnFrontiers.star < ahead && state.spawnFrontiers.star < cap) {
+      spawnStarClusterAt(state.spawnFrontiers.star);
+      state.spawnFrontiers.star += rand(620, 1050);
+    }
+    while (state.spawnFrontiers.can < ahead && state.spawnFrontiers.can < cap) {
+      spawnCan(state.spawnFrontiers.can, rand(H * 0.28, H * 0.70));
+      state.spawnFrontiers.can += rand(700, 1000);
+    }
+    while (state.spawnFrontiers.obstacle < ahead && state.spawnFrontiers.obstacle < cap) {
+      spawnObstacleAt(state.spawnFrontiers.obstacle);
+      state.spawnFrontiers.obstacle += rand(450, 800);
+    }
+    while (state.spawnFrontiers.platform < ahead && state.spawnFrontiers.platform < cap) {
+      spawnPlatformAt(state.spawnFrontiers.platform);
+      state.spawnFrontiers.platform += rand(800, 1200);
+    }
+  }
+  // Jet — moving obstacle, timer-based (not frontier-based since it advances on its own)
+  function spawnJet() {
+    const y = rand(H * 0.20, H * 0.55);
+    entities.push({
+      type: 'jet',
+      x: state.cameraX + W + 100,    // appears off-screen right
+      y,
+      w: CFG.jetW,
+      h: CFG.jetH,
+      vx: -CFG.jetSpeed,
+      alive: true,
+    });
+  }
+  // World x of the finish line — fixed, unlike the old auto-scroll model
+  function finishWorldX() { return CFG.levelDistance * CFG.pixelsPerMeter; }
+
+  // ------------- Update -------------
+  function update(dt) {
+    if (state.phase !== 'playing') return;
+
+    state.t += dt;
+
+    // ------- Horizontal player movement (works in air OR on a platform) -------
+    if (input.left && !input.right) {
+      player.vx = clamp(player.vx - CFG.walkAccel * dt, -CFG.walkMaxSpeed, CFG.walkMaxSpeed);
+      player.facing = -1;
+    } else if (input.right && !input.left) {
+      player.vx = clamp(player.vx + CFG.walkAccel * dt, -CFG.walkMaxSpeed, CFG.walkMaxSpeed);
+      player.facing = 1;
+    } else {
+      player.vx *= Math.exp(-CFG.walkDrag * dt);
+      if (Math.abs(player.vx) < 4) player.vx = 0;
+    }
+    player.x += player.vx * dt;
+    if (player.x < 0) { player.x = 0; player.vx = 0; }
+
+    // ------- Vertical player physics — branch on grounded vs flying -------
+    if (player.onPlatform) {
+      const p = player.onPlatform;
+      player.y = p.y - player.r;
+      player.vy = 0;
+      player.tilt += (0 - player.tilt) * Math.min(1, dt * 12);
+      player.animT += dt;
+
+      // walked off the side?
+      if (player.x < p.x - 6 || player.x > p.x + p.w + 6 || !p.alive) {
+        player.onPlatform = null;
+        player.vy = 60;
+      } else if (input.jumpTap) {
+        // tap-space quick jump — costs no fuel, small impulse
+        player.onPlatform = null;
+        player.vy = CFG.jumpImpulse;
+        for (let i = 0; i < 6; i++) addParticle(player.x - 6, player.y + 14, '#dfeaf2');
+      } else if (input.thrust && state.fuel > 0) {
+        // hold-thrust takeoff — bigger pop, will keep boosting once airborne
+        player.onPlatform = null;
+        player.vy = CFG.takeoffBoost;
+        for (let i = 0; i < 6; i++) addParticle(player.x - 10, player.y + 14, '#ffd84d');
+      }
+      // fuel does NOT drain while on a ledge
+    } else {
+      // airborne
+      const thrustOn = input.thrust && state.fuel > 0;
+      let accY = thrustOn ? CFG.thrust : CFG.gravity;
+      if (input.down) accY += CFG.downBoost;
+
+      const prevY = player.y;
+      player.vy = clamp(player.vy + accY * dt, CFG.maxRiseSpeed, CFG.maxFallSpeed);
+      player.vy *= CFG.drag;
+      player.y += player.vy * dt;
+
+      // tilt feedback (capped softly)
+      const targetTilt = clamp(player.vy / 700, -0.6, 0.7);
+      player.tilt += (targetTilt - player.tilt) * Math.min(1, dt * 8);
+      player.animT += dt;
+
+      // ceiling
+      if (player.y - player.r < ceilingY()) {
+        player.y = ceilingY() + player.r; player.vy = 0;
+      }
+
+      // landing on a platform — only when falling and crossing the top from above
+      if (player.vy >= 0) {
+        for (const e of entities) {
+          if (e.type !== 'platform' || !e.alive) continue;
+          if (player.x + player.r * 0.6 < e.x)        continue;
+          if (player.x - player.r * 0.6 > e.x + e.w)  continue;
+          const platTop = e.y;
+          const playerBottom = player.y + player.r;
+          const prevBottom = prevY + player.r;
+          if (prevBottom <= platTop + 2 && playerBottom >= platTop) {
+            player.onPlatform = e;
+            player.y = platTop - player.r;
+            player.vy = 0;
+            state.flash = 0.12;
+            for (let i = 0; i < 8; i++) addParticle(player.x, platTop, '#cfd6df');
+            break;
+          }
+        }
+      }
+
+      // ground hit = game over
+      if (!player.onPlatform && player.y + player.r >= groundY()) {
+        player.y = groundY() - player.r;
+        endRun(state.fuel <= 0 ? 'fuel' : 'crash');
+        addExplosion(player.x, player.y);
+      }
+
+      // fuel drains ONLY while actively thrusting (gliding is free)
+      if (thrustOn) {
+        const drain = CFG.fuelDrainPerSec + CFG.fuelDrainBoostPerSec;
+        state.fuel -= drain * dt;
+        if (state.fuel < 0) state.fuel = 0;
+      }
+    }
+
+    // consume any unhandled jump tap
+    input.jumpTap = false;
+
+    // ------- Camera follow -------
+    state.lastCameraX = state.cameraX;
+    state.cameraX = Math.max(0, player.x - W * CFG.cameraOffsetX);
+
+    // ------- Distance metric (max world x reached) -------
+    if (player.x > state.maxX) {
+      state.score += (player.x - state.maxX) * CFG.distanceScore;
+      state.maxX = player.x;
+      state.distance = state.maxX / CFG.pixelsPerMeter;
+    }
+
+    // ------- Spawn frontiers -------
+    runSpawnFrontier();
+
+    // ------- Jet timer — spawn occasional moving obstacles -------
+    state.jetTimer -= dt;
+    if (state.jetTimer <= 0) {
+      spawnJet();
+      state.jetTimer = rand(CFG.jetSpawnEveryMin, CFG.jetSpawnEveryMax);
+    }
+
+    // ------- Per-entity animation updates (no scroll — entities are in world coords) -------
+    for (const e of entities) {
+      if (e.type === 'star')  e.t   += dt * 4;
+      if (e.type === 'can')   e.bob += dt * 3;
+      if (e.type === 'rock')  { e.rot += e.spin * dt; }
+      if (e.type === 'drone') {
+        e.bob += dt * e.freq;
+        e.x  += e.vx * dt;
+        e.y   = e.hoverY + Math.sin(e.bob) * e.ampl;
+        e.hoverY += e.vx * 0.0; // hoverY stays — y is purely a bob around hoverY
+      }
+      if (e.type === 'saw')   { e.rot += e.spin * dt; e.bob += dt * e.freq; e.y = e.hoverY + Math.sin(e.bob) * e.ampl; }
+      if (e.type === 'jet')   { e.x += e.vx * dt; }   // jets move on their own
+    }
+
+    // ------- Collisions -------
+    for (const e of entities) {
+      if (!e.alive) continue;
+      if (e.type === 'platform') continue;          // handled in landing logic
+      if (!entityHitsPlayer(e)) continue;
+
+      if (e.type === 'star') {
+        e.alive = false;
+        state.stars++;
+        state.score += CFG.starScore;
+        for (let i = 0; i < 8; i++) addParticle(e.x, e.y, '#ffd84d');
+      } else if (e.type === 'can') {
+        e.alive = false;
+        state.fuel = clamp(state.fuel + CFG.fuelPerCan, 0, CFG.fuelMax);
+        for (let i = 0; i < 12; i++) addParticle(e.x, e.y, '#3aa0ff');
+        state.flash = 0.2;
+      } else {
+        // rock / drone / saw / wall = death
+        e.alive = false;
+        addExplosion(player.x, player.y);
+        endRun('crash');
+        break;
+      }
+    }
+
+    // cull entities that have fallen far behind the camera
+    entities = entities.filter(e => e.alive && (e.x + (e.w || e.r || 60)) > state.cameraX - 220);
+
+    // particles (in world coords now)
+    for (const p of particles) {
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vy += 600 * dt;
+      p.life -= dt;
+    }
+    particles = particles.filter(p => p.life > 0);
+
+    // parallax — clouds and mountains drift opposite to camera delta, slower than 1:1
+    const camDelta = state.cameraX - state.lastCameraX;
+    for (const c of clouds) {
+      c.x -= camDelta * 0.15 * c.speed;
+      if (c.x < -200) c.x = W + rand(0, 200);
+      else if (c.x > W + 200) c.x = -120 - rand(0, 200);
+    }
+    // mountains tile statelessly from cameraX in drawMountainLayer — nothing to update here.
+
+    state.shake = Math.max(0, state.shake - dt * 5);
+    state.flash = Math.max(0, state.flash - dt * 2);
+
+    // win check — crossed the finish line
+    if (player.x >= finishWorldX()) endRun('win');
+  }
+
+  // ------------- Collision shapes -------------
+  function entityHitsPlayer(e) {
+    if (e.type === 'star') return circleCircle(player.x, player.y, player.r, e.x, e.y, e.r);
+    if (e.type === 'saw')  return circleCircle(player.x, player.y, player.r, e.x, e.y, e.r * 0.85);
+    if (e.type === 'wall') return circleRect(player.x, player.y, player.r, e.x, e.y, e.w, e.h);
+    if (e.type === 'jet')  return circleRect(player.x, player.y, player.r, e.x - e.w*0.45, e.y - e.h*0.4, e.w*0.9, e.h*0.8);
+    // rect entities (can/rock/drone) use AABB centered on (x,y)
+    return circleRect(player.x, player.y, player.r, e.x - e.w/2, e.y - e.h/2, e.w, e.h);
+  }
+  function circleCircle(ax, ay, ar, bx, by, br) {
+    const dx = ax-bx, dy = ay-by;
+    return dx*dx + dy*dy < (ar+br)*(ar+br);
+  }
+  function circleRect(cx, cy, cr, rx, ry, rw, rh) {
+    const tx = clamp(cx, rx, rx + rw);
+    const ty = clamp(cy, ry, ry + rh);
+    const dx = cx - tx, dy = cy - ty;
+    return dx*dx + dy*dy < cr*cr;
+  }
+
+  // ------------- FX -------------
+  // Mobile devices get a lower particle budget so the framerate stays smooth.
+  const FX_SCALE = isTouchDevice ? 0.5 : 1.0;
+  function addParticle(x, y, color) {
+    if (Math.random() > FX_SCALE) return;     // probabilistically drop on mobile
+    particles.push({
+      x, y,
+      vx: rand(-180, 180),
+      vy: rand(-260, 60),
+      life: rand(0.3, 0.7),
+      color, r: rand(2, 4)
+    });
+  }
+  function addExplosion(x, y) {
+    state.shake = 0.6;
+    state.flash = 0.5;
+    const n = Math.round(30 * FX_SCALE);
+    for (let i = 0; i < n; i++) {
+      particles.push({
+        x, y,
+        vx: rand(-360, 360),
+        vy: rand(-360, 200),
+        life: rand(0.4, 1.1),
+        color: ['#ff6a00','#ffd84d','#ffffff','#d72c2c'][irand(0,3)],
+        r: rand(2, 5)
+      });
+    }
+  }
+
+  // ------------- End run -------------
+  function endRun(cause) {
+    if (state.phase !== 'playing') return;
+    state.cause = cause;
+    document.getElementById('touch-ui').classList.remove('show');
+    input.left = input.right = input.down = input.thrust = false; input._spaceHeld = false;
+    if (cause === 'win') {
+      state.score = Math.round(state.score + state.fuel * CFG.fuelLeftScore);
+      state.phase = 'win';
+      document.getElementById('winStars').textContent = state.stars;
+      document.getElementById('winFuel').textContent = Math.round(state.fuel) + '%';
+      document.getElementById('winScore').textContent = Math.round(state.score);
+      show('win');
+    } else {
+      state.phase = 'gameover';
+      document.getElementById('goStars').textContent = state.stars;
+      document.getElementById('goDist').textContent = Math.round(state.distance) + 'm';
+      document.getElementById('goScore').textContent = Math.round(state.score);
+      const t = document.getElementById('goTitle');
+      const s = document.getElementById('goSub');
+      if (cause === 'fuel') {
+        t.textContent = 'Out of energy!';
+        s.textContent = 'Energy hit zero and you fell. Land on ledges to save fuel and grab cans more aggressively.';
+      } else {
+        t.textContent = 'Wiped out!';
+        s.textContent = 'You hit something. Watch the gates, drones, saws, and rocks.';
+      }
+      show('gameover');
+    }
+  }
+
+  // ------------- Render -------------
+  function render() {
+    const sky = ctx.createLinearGradient(0, 0, 0, H);
+    sky.addColorStop(0, '#0b2a4a');
+    sky.addColorStop(1, '#4aa3df');
+    ctx.fillStyle = sky;
+    ctx.fillRect(0, 0, W, H);
+
+    let sx = 0, sy = 0;
+    if (state.shake > 0) {
+      sx = rand(-1, 1) * state.shake * 8;
+      sy = rand(-1, 1) * state.shake * 8;
+    }
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // sun (fixed in screen space, top-right)
+    drawSun();
+
+    // Clouds sit furthest back — drawn behind the mountains and every other layer.
+    for (const c of clouds) drawCloud(c);
+
+    // Mountains — three depth layers, each tiling edge-to-edge. The sprites are
+    // pre-cropped to peaks + clean upper body, anchored at the bottom of the
+    // screen, so there's nothing ragged to hide — no haze band, no base band.
+    for (const layer of mountainLayers) drawMountainLayer(layer);
+
+    // No ground strip / no sub-ground. The mountain band is the floor — its
+    // anchored-at-bottom-of-screen layout fills the entire lower portion.
+
+    // ----- World-space rendering: shift everything by -cameraX -----
+    ctx.save();
+    ctx.translate(-state.cameraX, 0);
+
+    // walls (gates) first, then platforms, then the smaller stuff on top
+    for (const e of entities) if (e.type === 'wall')     drawWall(e);
+    for (const e of entities) if (e.type === 'platform') drawPlatform(e);
+    for (const e of entities) {
+      if (e.type === 'star')  drawStar(e);
+      else if (e.type === 'can')   drawCan(e);
+      else if (e.type === 'rock')  drawRock(e);
+      else if (e.type === 'drone') drawDrone(e);
+      else if (e.type === 'saw')   drawSaw(e);
+      else if (e.type === 'jet')   drawJet(e);
+    }
+
+    // finish line at fixed world x
+    drawFinish(finishWorldX());
+
+    if (state.phase !== 'gameover') drawPlayer();
+
+    for (const p of particles) {
+      ctx.globalAlpha = clamp(p.life * 1.4, 0, 1);
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    ctx.restore(); // end world-space
+    ctx.restore(); // end shake
+
+    if (state.flash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${state.flash * 0.35})`;
+      ctx.fillRect(0,0,W,H);
+    }
+
+    drawHUD();
+  }
+
+  // --- environment art ---
+  function drawCloud(c) {
+    const sprite = sprites[c.sprite] || sprites.cloud_a;
+    if (sprite) {
+      ctx.save();
+      ctx.globalAlpha = 0.95;
+      const size = 140 * c.s;
+      drawSprite(sprite, c.x, c.y, size);
+      ctx.restore();
+      return;
+    }
+    // vector fallback
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = '#ffffff';
+    ctx.translate(c.x, c.y); ctx.scale(c.s, c.s);
+    ctx.beginPath();
+    ctx.arc(0, 0, 22, 0, Math.PI*2);
+    ctx.arc(20, -6, 18, 0, Math.PI*2);
+    ctx.arc(40, 2, 22, 0, Math.PI*2);
+    ctx.arc(58, -2, 16, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  }
+  // Tile the two mountain sprites edge-to-edge across the screen for one depth
+  // layer. Alternates mountains_a / mountains_b, scrolled by the layer's parallax
+  // factor — stateless, computed straight from cameraX, so the range never ends.
+  function drawMountainLayer(layerDef) {
+    const baseY   = H + 14;                          // bleed below the screen edge
+    const targetH = H * layerDef.displayH;
+    const dy      = baseY - targetH + H * layerDef.yOffset;
+
+    const a = sprites.mountains_a, b = sprites.mountains_b;
+    if (a || b) {
+      const seq = [a || b, b || a];                  // alternating a / b pair
+      const widths = seq.map(s => {
+        const sw = s.naturalWidth || s.width, sh = s.naturalHeight || s.height;
+        return sw * (targetH / sh);                  // displayed width at this layer's height
+      });
+      const period = widths[0] + widths[1];
+      const scroll = state.cameraX * layerDef.parallax;
+      let x = -(scroll % period);                    // period-aligned start (always begins on 'a')
+      let i = 0;
+      ctx.save();
+      ctx.globalAlpha = layerDef.alpha;
+      while (x < W) {
+        ctx.drawImage(seq[i % 2], x, dy, widths[i % 2], targetH);
+        x += widths[i % 2];
+        i++;
+      }
+      ctx.restore();
+      return;
+    }
+
+    // ---- Procedural fallback (only shows for the split second before sprites load) ----
+    ctx.save();
+    ctx.globalAlpha = layerDef.alpha;
+    ctx.fillStyle = '#6e84a0';
+    const peakW = 300;
+    const off = (state.cameraX * layerDef.parallax) % (peakW * 2);
+    ctx.beginPath();
+    ctx.moveTo(-peakW * 2, baseY);
+    for (let px = -peakW * 2 - off; px < W + peakW * 2; px += peakW) {
+      ctx.lineTo(px + peakW / 2, dy);
+      ctx.lineTo(px + peakW,     baseY);
+    }
+    ctx.lineTo(W + peakW * 2, baseY);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  // The illustrated grass strip — tiled across the bottom of the screen, scrolled with cameraX.
+  function drawGroundStrip() {
+    const sprite = sprites.ground;
+    if (!sprite) return false;
+    const sw = sprite.naturalWidth  || sprite.width;
+    const sh = sprite.naturalHeight || sprite.height;
+    const targetH = 90;                     // height of the grass+dirt band on screen
+    const scale = targetH / sh;
+    const w = sw * scale, h = sh * scale;
+    // anchor the strip with its grass line ~10px above the old groundY (so the wavy top reads cleanly)
+    const drawY = groundY() - 10;
+    const offset = state.cameraX % w;
+    for (let x = -offset; x < W + w; x += w) ctx.drawImage(sprite, x, drawY, w + 1, h);
+    return true;
+  }
+  function drawSun() {
+    const sprite = sprites.sun;
+    const cx = W * 0.82, cy = H * 0.20;
+    if (sprite) {
+      ctx.save();
+      ctx.globalAlpha = 0.85;
+      drawSprite(sprite, cx, cy, 180);
+      ctx.restore();
+    } else {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#ffe9a8';
+      ctx.beginPath(); ctx.arc(cx, cy, 80, 0, Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // --- pickups ---
+  function drawStar(e) {
+    const pulse = 1 + Math.sin(e.t) * 0.08;
+    const sprite = sprites.star;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.scale(pulse, pulse);
+    if (sprite) {
+      // soft yellow glow underneath
+      ctx.globalAlpha = 0.30;
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath(); ctx.arc(0, 0, e.r + 8, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      drawSprite(sprite, 0, 0, e.r * 3.0);
+    } else {
+      ctx.rotate(e.t * 0.4);
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = '#ffd84d';
+      ctx.beginPath(); ctx.arc(0, 0, e.r + 6, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#ffd84d';
+      ctx.strokeStyle = '#a86b00';
+      ctx.lineWidth = 2;
+      drawStarShape(0, 0, 5, e.r, e.r * 0.45);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  function drawStarShape(cx, cy, points, outer, inner) {
+    ctx.beginPath();
+    for (let i = 0; i < points * 2; i++) {
+      const r = (i % 2 === 0) ? outer : inner;
+      const a = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+      const x = cx + Math.cos(a) * r;
+      const y = cy + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  }
+  function drawCan(e) {
+    const sprite = sprites.can;
+    ctx.save();
+    ctx.translate(e.x, e.y + Math.sin(e.bob) * 3);
+    if (sprite) {
+      const sw = sprite.naturalWidth  || sprite.width;
+      const sh = sprite.naturalHeight || sprite.height;
+      const targetH = CFG.canSpriteHeight;
+      const scale = targetH / sh;
+      const w = sw * scale, h = sh * scale;
+      // soft blue glow ring
+      ctx.globalAlpha = 0.30;
+      ctx.strokeStyle = '#3aa0ff';
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 0, h * 0.55, 0, Math.PI*2); ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.drawImage(sprite, -w/2, -h/2, w, h);
+    } else {
+      // vector fallback while sprite loads / if missing
+      const w = e.w, h = e.h;
+      ctx.fillStyle = '#d9dde3'; ctx.fillRect(-w/2, -h/2, w, h);
+      ctx.fillStyle = '#1e3a8a'; ctx.fillRect(-w/2, -h/2, w, h * 0.55);
+      ctx.fillStyle = '#d72c2c';
+      ctx.beginPath();
+      ctx.moveTo(-w/2 + 2, -h/2 + h*0.2);
+      ctx.lineTo(0,        -h/2 + h*0.45);
+      ctx.lineTo( w/2 - 2, -h/2 + h*0.2);
+      ctx.lineTo(0,        -h/2 + 2);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#9aa0a8'; ctx.fillRect(-w/2, -h/2 - 3, w, 4);
+      ctx.strokeStyle = '#0006'; ctx.lineWidth = 1.5; ctx.strokeRect(-w/2, -h/2, w, h);
+      ctx.globalAlpha = 0.3;
+      ctx.strokeStyle = '#3aa0ff'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(0, 0, w*0.9, 0, Math.PI*2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // --- obstacles ---
+  function drawRock(e) {
+    const sprite = sprites.rock;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(e.rot);
+    if (sprite) {
+      drawSprite(sprite, 0, 0, Math.max(e.w, e.h) + 16);
+    } else {
+      ctx.fillStyle = '#6b6e75'; ctx.strokeStyle = '#2c2f36'; ctx.lineWidth = 2;
+      ctx.beginPath();
+      const w = e.w/2, h = e.h/2;
+      ctx.moveTo(-w, 0); ctx.lineTo(-w*0.5, -h); ctx.lineTo(w*0.4, -h*0.85);
+      ctx.lineTo(w, 0); ctx.lineTo(w*0.6, h); ctx.lineTo(-w*0.5, h*0.9);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+  // "drone" entity — visually a flock of birds, flying leftward
+  function drawDrone(e) {
+    const sprite = sprites.birds;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    if (e.facing === -1) ctx.scale(-1, 1);     // sprite source faces right; flip if cruising left
+    if (sprite) {
+      drawSprite(sprite, 0, 0, e.w * 2.4);
+    } else {
+      const w = e.w, h = e.h;
+      ctx.fillStyle = '#222831';
+      ctx.fillRect(-w/2, -h/2, w, h*0.6);
+    }
+    ctx.restore();
+  }
+  // "saw" entity — visually a windmill blade assembly that spins
+  function drawSaw(e) {
+    const sprite = sprites.windmill;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(e.rot);
+    if (sprite) {
+      drawSprite(sprite, 0, 0, e.r * 2.6);
+    } else {
+      ctx.fillStyle = '#cdd3da';
+      ctx.beginPath(); ctx.arc(0, 0, e.r, 0, Math.PI*2); ctx.fill();
+      ctx.fillStyle = '#444a52';
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 0.35, 0, Math.PI*2); ctx.fill();
+    }
+    ctx.restore();
+  }
+  // "wall" entity — the gates. Top wall = storm cloud (anchor='top');
+  // bottom wall = pine tree (anchor='bottom'). Sprites are drawn at fixed sizes
+  // anchored to the relevant edge so cropped image edges hide off-screen; the
+  // ENTITY rectangle (e.x, e.y, e.w, e.h) still drives collision.
+  function drawWall(e) {
+    // Only the top variant is used now — storm cloud hangs from above.
+    const sprite = sprites.storm;
+    if (sprite) {
+      const sw = sprite.naturalWidth  || sprite.width;
+      const sh = sprite.naturalHeight || sprite.height;
+      const targetW = e.w * 3.2;
+      const scale = targetW / sw;
+      const w = sw * scale, h = sh * scale;
+      const dx = e.x + e.w/2 - w/2;
+      const dy = -30;
+      ctx.drawImage(sprite, dx, dy, w, h);
+      return;
+    }
+    ctx.save();
+    ctx.fillStyle = '#5a6470';
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+    ctx.restore();
+  }
+  function drawPlatform(e) {
+    const sprite = sprites.ledge;
+    if (sprite) {
+      const sw = sprite.naturalWidth  || sprite.width;
+      const sh = sprite.naturalHeight || sprite.height;
+      // Scale so platform's grass-line ends up at e.y. The sprite's top region
+      // is the flat-top with grass tufts, the rest hangs below as the rocky underside.
+      const targetW = e.w * 1.06;          // slight overshoot so sprite fully covers collision rect
+      const scale = targetW / sw;
+      const w = sw * scale, h = sh * scale;
+      // The sprite's top (grass) is roughly in the upper ~12% of the image. Compensate.
+      const grassRatio = 0.10;
+      const dx = e.x + e.w/2 - w/2;
+      const dy = e.y - h * grassRatio;
+      ctx.drawImage(sprite, dx, dy, w, h);
+      return;
+    }
+    // fallback
+    ctx.save();
+    ctx.fillStyle = '#7a8995';
+    ctx.fillRect(e.x, e.y, e.w, e.h);
+    ctx.fillStyle = '#3d8a4a';
+    ctx.fillRect(e.x, e.y - 4, e.w, 4);
+    ctx.restore();
+  }
+  // Jet — moving obstacle, flies right-to-left at high speed.
+  function drawJet(e) {
+    const sprite = sprites.jet;
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    if (sprite) {
+      drawSprite(sprite, 0, 0, e.w * 1.2);
+    } else {
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(-e.w/2, -e.h/2, e.w, e.h);
+    }
+    ctx.restore();
+  }
+
+  function drawFinish(x) {
+    ctx.save();
+    ctx.fillStyle = '#eee';
+    ctx.fillRect(x, 80, 6, groundY() - 80);
+    const bw = 80, bh = 50;
+    let toggle = false;
+    for (let by = 0; by < bh; by += 10) {
+      for (let bx = 0; bx < bw; bx += 10) {
+        ctx.fillStyle = toggle ? '#111' : '#fff';
+        ctx.fillRect(x + 6 + bx, 90 + by, 10, 10);
+        toggle = !toggle;
+      }
+      toggle = !toggle;
+    }
+    ctx.fillStyle = '#d72c2c';
+    ctx.font = 'bold 16px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('FINISH', x + 14, 116);
+    ctx.restore();
+  }
+
+  // --- player ---
+  // Pick which sprite key matches the player's current state.
+  function pickHeroSprite() {
+    if (state.phase === 'win')      return 'win';
+    if (state.phase === 'gameover' && state.cause === 'crash') return 'dive';
+    if (player.onPlatform) {
+      // running only when actually moving along the ledge; otherwise idle.
+      return Math.abs(player.vx) > 30 ? 'run' : 'idle';
+    }
+    // airborne
+    if (input.thrust && state.fuel > 0) return 'thrust';
+    if (player.vy > 240)                return 'dive';   // fast falling
+    return 'glide';
+  }
+
+  function drawPlayer() {
+    const grounded = !!player.onPlatform;
+    const flying = !grounded;
+
+    // try sprite first; if missing, fall back to vector hero below
+    const key = pickHeroSprite();
+    const sprite = sprites[key];
+
+    if (sprite) {
+      ctx.save();
+      ctx.translate(player.x, player.y);
+      // less tilt with sprite — illustration already conveys motion
+      ctx.rotate(player.tilt * 0.4);
+
+      // soft wind streaks behind hero while thrusting (wings = no flame)
+      if (flying && input.thrust && state.fuel > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.strokeStyle = '#ffffff';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        for (let i = 0; i < 3; i++) {
+          const phase = (player.animT * 18 + i * 1.7) % 1;
+          const len = 16 + (1 - phase) * 18;
+          const yOff = -10 + i * 10;
+          ctx.globalAlpha = 0.55 * (1 - phase);
+          ctx.beginPath();
+          ctx.moveTo(-26 - phase * 14, yOff);
+          ctx.lineTo(-26 - phase * 14 - len, yOff);
+          ctx.stroke();
+        }
+        ctx.restore();
+      }
+
+      // Normalize by the longest bounding-box dimension (so a wide horizontal
+      // glide and a tall idle pose both occupy the same on-screen extent),
+      // then apply a per-pose multiplier for fine-tuning.
+      const sw = sprite.naturalWidth  || sprite.width;
+      const sh = sprite.naturalHeight || sprite.height;
+      const longest = Math.max(sw, sh);
+      const baseScale = CFG.heroTargetSize / longest;
+      const userScale = HERO_SCALE[key] || 1;
+      const scale = baseScale * userScale;
+      const w = sw * scale;
+      const h = sh * scale;
+      if (player.facing === -1) ctx.scale(-1, 1);
+      ctx.drawImage(sprite, -w/2, -h/2, w, h);
+      ctx.restore();
+      return;
+    }
+
+    // ---------- vector fallback (used until PNGs are dropped) ----------
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.tilt);
+
+    if (flying) {
+      const flap = (input.thrust && state.fuel > 0) ? Math.sin(player.animT * 28) * 6 : Math.sin(player.animT * 6) * 2;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      ctx.moveTo(-12, -6);
+      ctx.lineTo(-32, -16 + flap);
+      ctx.lineTo(-30,  -2 + flap);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle = '#d72c2c';
+      ctx.beginPath();
+      ctx.moveTo(-12, 4);
+      ctx.lineTo(-30, 16 - flap);
+      ctx.lineTo(-12, 12);
+      ctx.closePath(); ctx.fill();
+    } else {
+      // folded wing while running
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(-22, -10, 6, 14);
+      ctx.fillStyle = '#d72c2c';
+      ctx.fillRect(-22, 4, 6, 8);
+    }
+
+    // body — head & torso
+    ctx.fillStyle = '#f3c69b';
+    ctx.beginPath(); ctx.arc(2, -10, 8, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#d72c2c';
+    ctx.beginPath();
+    ctx.arc(2, -12, 9, Math.PI, 0); ctx.fill();
+    ctx.fillStyle = '#0a0a0a';
+    ctx.fillRect(-3, -12, 11, 4);
+    ctx.fillStyle = '#1e3a8a';
+    ctx.fillRect(-6, -3, 16, 16);
+    ctx.fillStyle = '#ffd84d';
+    ctx.fillRect(-6, 1, 16, 3);
+
+    // legs — running cycle when on platform, static when flying
+    if (grounded) {
+      const phase = player.animT * 14;
+      const lLeg = Math.sin(phase) * 5;
+      const rLeg = Math.sin(phase + Math.PI) * 5;
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-4, 12 + Math.max(0,-lLeg), 6, 8 - Math.max(0,-lLeg)*0.4);
+      ctx.fillRect( 3, 12 + Math.max(0,-rLeg), 6, 8 - Math.max(0,-rLeg)*0.4);
+      // shoes blur
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.beginPath();
+      ctx.ellipse(-1, 22, 12, 2, 0, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.fillStyle = '#222';
+      ctx.fillRect(-4, 12, 6, 8);
+      ctx.fillRect( 3, 12, 6, 8);
+    }
+
+    // wind streaks behind body while thrusting (wings, not jetpack)
+    if (flying && input.thrust && state.fuel > 0) {
+      ctx.save();
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      for (let i = 0; i < 3; i++) {
+        const phase = (player.animT * 18 + i * 1.7) % 1;
+        const len = 12 + (1 - phase) * 14;
+        const yOff = -6 + i * 7;
+        ctx.globalAlpha = 0.5 * (1 - phase);
+        ctx.beginPath();
+        ctx.moveTo(-18 - phase * 10, yOff);
+        ctx.lineTo(-18 - phase * 10 - len, yOff);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // --- HUD ---
+  function drawHUD() {
+    const pad = 16;
+    const barW = 240, barH = 18;
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(pad - 6, pad - 6, barW + 12, barH + 12, 10); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px system-ui, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('ENERGY', pad, pad - 10);
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    roundRect(pad, pad, barW, barH, 8); ctx.fill();
+    const pct = state.fuel / CFG.fuelMax;
+    const grad = ctx.createLinearGradient(pad, 0, pad + barW, 0);
+    if (pct > 0.4)      { grad.addColorStop(0, '#3aa0ff'); grad.addColorStop(1, '#80d0ff'); }
+    else if (pct > 0.2) { grad.addColorStop(0, '#ffaa00'); grad.addColorStop(1, '#ffd84d'); }
+    else                { grad.addColorStop(0, '#ff3b3b'); grad.addColorStop(1, '#ff8a8a'); }
+    ctx.fillStyle = grad;
+    roundRect(pad, pad, Math.max(0, barW * pct), barH, 8); ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 1.5;
+    roundRect(pad, pad, barW, barH, 8); ctx.stroke();
+
+    // grounded indicator
+    if (player && player.onPlatform) {
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      roundRect(pad - 6, pad + barH + 6, 188, 26, 8); ctx.fill();
+      ctx.fillStyle = '#9af0a5';
+      ctx.font = 'bold 12px system-ui, sans-serif';
+      ctx.fillText('● ON LEDGE — energy paused', pad, pad + barH + 24);
+    }
+
+    // top-right: distance + score + stars
+    ctx.textAlign = 'right';
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(W - 260, pad - 6, 244, 56, 10); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 14px system-ui, sans-serif';
+    ctx.fillText('DIST  ' + Math.round(state.distance) + 'm / ' + CFG.levelDistance + 'm', W - pad, pad + 8);
+    ctx.fillText('SCORE ' + Math.round(state.score), W - pad, pad + 28);
+    ctx.fillText('★ ' + state.stars, W - pad, pad + 46);
+
+    // distance progress bar bottom
+    const pbY = H - 22;
+    ctx.fillStyle = 'rgba(0,0,0,0.35)';
+    roundRect(pad - 4, pbY - 4, W - (pad-4)*2, 14, 6); ctx.fill();
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    roundRect(pad, pbY, W - pad*2, 6, 3); ctx.fill();
+    const dp = clamp(state.distance / CFG.levelDistance, 0, 1);
+    ctx.fillStyle = '#ffd84d';
+    roundRect(pad, pbY, (W - pad*2) * dp, 6, 3); ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(pad + (W - pad*2) * 1, pbY + 3, 5, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function roundRect(x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y,     x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x,     y + h, r);
+    ctx.arcTo(x,     y + h, x,     y,     r);
+    ctx.arcTo(x,     y,     x + w, y,     r);
+    ctx.closePath();
+  }
+
+  // ------------- Loop -------------
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.033, (now - last) / 1000);
+    last = now;
+    if (state.phase === 'playing') update(dt);
+    render();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ------------- UI wiring -------------
+  function show(id) { document.getElementById(id).classList.remove('hidden'); }
+  function hide(id) { document.getElementById(id).classList.add('hidden'); }
+  function hideAllPanels() { ['start','pause','gameover','win'].forEach(hide); }
+
+  document.getElementById('startBtn').addEventListener('click', startRun);
+  document.getElementById('resumeBtn').addEventListener('click', () => { state.phase='playing'; hide('pause'); });
+  document.getElementById('retryBtn').addEventListener('click', startRun);
+  document.getElementById('nextBtn').addEventListener('click', startRun);
+
+  // initial menu visible; player object exists for menu draw
+  player = makePlayer();
+  clouds = makeClouds();
+  mountainLayers = makeMountainLayers();
+  entities = [];
+  particles = [];
+})();
+</script>
+</body>
+</html>
